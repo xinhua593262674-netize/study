@@ -28,6 +28,23 @@
     }
   }
 
+  function saveLocalData(data) {
+    localStorage.setItem("economy-real-data", JSON.stringify(data));
+  }
+
+  function updateLocalQuestion(questionId, action, snapshot = {}) {
+    const data = getLocalData();
+    if (!data?.questions?.length) return null;
+    const question = data.questions.find((item) => item.id === questionId);
+    if (!question) return null;
+    const targetStatus = action === "退回修改" ? "待初审" : action === "提交复审" ? "待复审" : question.reviewStatus || "待初审";
+    question.reviewStatus = targetStatus;
+    question.reviews = question.reviews || [];
+    question.reviews.unshift({ action, targetStatus, snapshot, reviewer: "教研人员", createdAt: new Date().toISOString() });
+    saveLocalData(data);
+    return { questionId, action, targetStatus, risks: question.sourceStatus === "部分数字缺失" ? ["部分数字缺失"] : [] };
+  }
+
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
@@ -46,7 +63,11 @@
       sourceStatus: item.sourceStatus || "本机真实数据",
       reviewStatus: item.reviewStatus || "待初审",
       options: item.options || [],
-      associations: item.associations || [],
+      associations: item.associations?.length ? item.associations : item.knowledge ? [{
+        title: item.knowledge,
+        path: "真实真题解析提供的关联考点，待匹配知识体系节点",
+        evidence: `真题解析关联考点：${item.knowledge}`,
+      }] : [],
       reviews: item.reviews || [],
     };
   }
@@ -150,19 +171,7 @@
     if (!questions.length) return;
 
     function renderPreviewQuestion(question, raw, index) {
-      if (document.title !== "教材预览") return false;
-      const doc = $(".doc");
-      const pageButton = $$("button").find((button) => /第\s*\d+\s*\/\s*\d+\s*题/.test(button.textContent));
-      if (pageButton) pageButton.textContent = `第 ${index + 1} / ${questions.length} 题`;
-      doc.innerHTML = `<h2>${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</h2>
-        <h3>${escapeHtml(raw.knowledge || "待人工关联考点")}</h3>
-        <p><span class="highlight">${escapeHtml(question.stem)}</span></p>
-        <p><b>正确答案：</b>${escapeHtml(question.answer)}</p>
-        <h3>真题解析</h3>
-        <p>${escapeHtml(question.analysis)}</p>
-        <p class="muted">来源：${escapeHtml(question.sourcePage)} · ${escapeHtml(question.sourceStatus)}</p>`;
-      document.body.dataset.previewQuestionIndex = String(index);
-      return true;
+      return false;
     }
 
     function selectQuestion(scope, index) {
@@ -205,12 +214,6 @@
         $(".page-question-count", aside).textContent = `${visible} / ${questions.length} 道`;
       });
       bindRows(aside);
-      const previous = $$("button").find((button) => button.textContent.trim() === "上一题");
-      const next = $$("button").find((button) => button.textContent.trim() === "下一题");
-      [previous, next].forEach(markBound);
-      previous.onclick = () => selectQuestion(aside, Math.max(0, Number(document.body.dataset.previewQuestionIndex || 0) - 1));
-      next.onclick = () => selectQuestion(aside, Math.min(questions.length - 1, Number(document.body.dataset.previewQuestionIndex || 0) + 1));
-      selectQuestion(aside, 0);
       return;
     }
 
@@ -225,34 +228,107 @@
     $(".page-question-search", section).oninput = (event) => renderTable(section, event.target.value.trim().toLowerCase());
   }
 
+  function hydrateKnowledgeTable() {
+    if (document.title !== "教研大宽表") return;
+    const knowledge = getLocalData()?.knowledge || [];
+    const tbody = $("tbody");
+    if (!knowledge.length || !tbody) return;
+    tbody.innerHTML = knowledge.map((item) => {
+      const title = item["六级知识点"] || item["五级知识点"] || item["四级知识点"] || item["三级知识点"] || "未命名考点";
+      const accuracy = item["客观题正确率"] == null ? "—" : `${(Number(item["客观题正确率"]) * 100).toFixed(2)}%`;
+      return `<tr><td>${escapeHtml(title)}</td><td>${escapeHtml(item["考点ID"])}</td><td>${accuracy}</td><td>${escapeHtml(item["分值"] === "null" ? "—" : item["分值"])}</td><td>${Number(item["考频"] || 0)}</td><td>${Number(item["总题数"] || 0)}</td><td>${Number(item["单选题数量"] || 0)}</td><td>${Number(item["不定向题数量"] || 0)}</td><td><span class="badge g">真实数据</span></td></tr>`;
+    }).join("");
+  }
+
+  function hydrateReleasePage() {
+    if (document.title !== "发布管理") return;
+    const questions = getLocalData()?.questions || [];
+    if (!questions.length) return;
+    const partial = questions.filter((item) => item.sourceStatus !== "已解析").length;
+    const statuses = questions.reduce((result, item) => {
+      const status = item.reviewStatus || "待初审";
+      result[status] = (result[status] || 0) + 1;
+      return result;
+    }, {});
+    const metrics = $$(".metric b");
+    if (metrics[0]) metrics[0].textContent = questions.length;
+    if (metrics[3]) metrics[3].textContent = partial;
+    const fail = $(".check.fail");
+    if (fail) fail.innerHTML = `<i>×</i><div><b>${partial} 道题存在部分数字缺失</b><br><span class="muted">待初审 ${statuses["待初审"] || 0} · 待复审 ${statuses["待复审"] || 0} · 待发布 ${statuses["待发布"] || 0}</span></div>`;
+  }
+
+  function hydrateTextbookPages() {
+    if (!["教材预览", "教材解析验收"].includes(document.title)) return;
+    const pages = getLocalData()?.textbook || [];
+    const doc = $(".doc");
+    if (!pages.length || !doc) return;
+    const initial = document.title === "教材解析验收" ? 16 : Number(document.body.dataset.textbookPage || 1);
+
+    function renderPage(pageNumber) {
+      const page = pages[Math.max(0, Math.min(pages.length - 1, pageNumber - 1))];
+      document.body.dataset.textbookPage = String(page.page);
+      const paragraphs = page.text.split(/\n+/).filter(Boolean);
+      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}`;
+      const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
+      if (pageButton) pageButton.textContent = `P.${page.page} / ${pages.length}`;
+      const pageLabel = $$(".card-head .push").find((item) => /P\.\d+\s*\/\s*\d+/.test(item.textContent));
+      if (pageLabel) pageLabel.textContent = `P.${page.page} / ${pages.length}　−　100%　＋`;
+    }
+
+    const previous = $$("button").find((button) => button.textContent.trim() === "上一页");
+    const next = $$("button").find((button) => button.textContent.trim() === "下一页");
+    if (previous && next) {
+      [previous, next].forEach(markBound);
+      previous.onclick = () => renderPage(Number(document.body.dataset.textbookPage || 1) - 1);
+      next.onclick = () => renderPage(Number(document.body.dataset.textbookPage || 1) + 1);
+    }
+    renderPage(initial);
+  }
+
   function bindLocalDataImport() {
     const button = $(".local-data-btn");
     const input = $(".local-data-input");
     if (!button || !input) return;
     markBound(button);
     const existing = getLocalData();
-    if (existing) button.textContent = `已加载真实数据 ${existing.questions?.length || 0} 题`;
+    const legacy = existing?.questions?.length && existing.questions.every((item) => item.stem?.includes("来源题干待修复"));
+    if (legacy) {
+      button.textContent = "数据版本过旧，请重新加载";
+      button.classList.add("warn");
+      setTimeout(() => toast("当前浏览器缓存的是旧版占位数据，请重新选择更新后的两个 JSON 文件", "warn"), 300);
+    } else if (existing) {
+      button.textContent = `已加载 ${existing.questions?.length || 0} 题 / ${existing.textbook?.length || 0} 页`;
+    }
     button.addEventListener("click", () => input.click());
     input.addEventListener("change", async () => {
-      const loaded = { questions: [], knowledge: [] };
+      const existingData = getLocalData() || {};
+      const loaded = { questions: existingData.questions || [], knowledge: existingData.knowledge || [], textbook: existingData.textbook || [] };
       for (const file of input.files) {
         const records = JSON.parse(await file.text());
         if (!Array.isArray(records)) continue;
         if (records[0]?.["考点ID"]) loaded.knowledge = records;
+        else if (records[0]?.page && records[0]?.text) loaded.textbook = records;
         else loaded.questions = records;
       }
-      localStorage.setItem("economy-real-data", JSON.stringify(loaded));
-      button.textContent = `已加载真实数据 ${loaded.questions.length} 题`;
-      toast(`真实数据已在本机浏览器加载：${loaded.questions.length} 题、${loaded.knowledge.length} 个考点`, "success");
+      saveLocalData(loaded);
+      button.textContent = `已加载 ${loaded.questions.length} 题 / ${loaded.textbook.length} 页`;
+      toast(`真实数据已加载：${loaded.questions.length} 题、${loaded.knowledge.length} 个考点、${loaded.textbook.length} 页教材`, "success");
       if ($(".queue")) renderLocalQueue(loaded.questions);
       hydrateAllQuestionDrawer();
       hydratePageQuestionData();
+      hydrateKnowledgeTable();
+      hydrateReleasePage();
+      hydrateTextbookPages();
     });
   }
 
   function renderLocalQueue(records) {
     const queue = $(".queue");
-    if (!queue || !records.length) return;
+    if (!queue) return;
+    if (!records.length) {
+      queue.innerHTML = `<div class="analysis-box"><b>当前队列暂无数据</b><br>完成审核动作后，对应题目会进入此队列。</div>`;
+      return;
+    }
     const questions = records.map(normalizeLocalQuestion);
     const count = $(".panel-head .head-count");
     if (count) count.textContent = `${questions.length} 道真实题目`;
@@ -324,8 +400,14 @@
   async function saveReview(action, snapshot = {}) {
     const questionId = document.body.dataset.questionId;
     if (!questionId || !apiEnabled) {
+      const saved = updateLocalQuestion(questionId, action, snapshot);
       setAutosave();
-      return { targetStatus: action === "退回修改" ? "待初审" : "待复审", risks: ["本地演示模式"] };
+      const activeStatus = $(".q-item.active .q-top .badge");
+      if (activeStatus && saved) activeStatus.textContent = saved.targetStatus;
+      const detailStatus = $(".question-meta .badge.green");
+      if (detailStatus && saved) detailStatus.textContent = saved.targetStatus;
+      hydrateReleasePage();
+      return saved || { targetStatus: action === "退回修改" ? "待初审" : "待复审", risks: ["本地演示模式"] };
     }
     return api(`/api/questions/${encodeURIComponent(questionId)}/reviews`, {
       method: "POST",
@@ -399,7 +481,13 @@
     const queue = $(".queue");
     if (!queue) return;
     const local = getLocalData();
-    if (local?.questions?.length) return renderLocalQueue(local.questions);
+    if (local?.questions?.length) {
+      const view = new URLSearchParams(location.search).get("view");
+      const questions = view === "review"
+        ? local.questions.filter((item) => item.reviewStatus === "待复审")
+        : local.questions;
+      return renderLocalQueue(questions);
+    }
     if (!apiEnabled) return;
     try {
       const questions = await api("/api/questions");
@@ -529,6 +617,12 @@
       } else {
         setAutosave();
         toast(`${action}完成`, "success");
+        if (action.includes("上一题") || action.includes("下一题")) {
+          const items = $$(".q-item");
+          const current = items.findIndex((item) => item.classList.contains("active"));
+          const offset = action.includes("上一题") ? -1 : 1;
+          items[Math.max(0, Math.min(items.length - 1, current + offset))]?.click();
+        }
       }
       });
     });
@@ -669,6 +763,9 @@
     bindAllQuestionDrawer();
     hydrateAllQuestionDrawer();
     hydratePageQuestionData();
+    hydrateKnowledgeTable();
+    hydrateReleasePage();
+    hydrateTextbookPages();
     bindFallbackButtons();
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();

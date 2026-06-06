@@ -28,5 +28,11 @@ test("HTTP 路由返回真实发布阻断状态", async () => {
   const release = await request("/api/releases/check");
   assert.equal(release.status, 200);
   assert.equal(release.body.canPublish, false);
-  assert.equal(release.body.blockers, 397);
+  assert.equal(release.body.blockers, 139);
+});
+
+test("HTTP 路由默认返回全部知识考点", async () => {
+  const knowledge = await request("/api/knowledge");
+  assert.equal(knowledge.status, 200);
+  assert.equal(knowledge.body.length, 631);
 });

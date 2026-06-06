@@ -7,6 +7,7 @@
     "start": "node server/app.js",
     "import:knowledge": "node scripts/import-knowledge.mjs",
     "import:questions": "python3 scripts/import-questions.py",
+    "import:textbook": "python3 scripts/import-textbook.py",
     "import:associations": "node scripts/import-associations.js"
   }
 }

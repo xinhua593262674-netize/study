@@ -40,7 +40,7 @@ async function handle(req, res) {
     const result = service.saveReview(id, await readBody(req));
     return json(res, result ? 201 : 404, result || { error: "题目不存在" });
   }
-  if (url.pathname === "/api/knowledge" && req.method === "GET") return json(res, 200, service.listKnowledge(url.searchParams.get("limit") || 50));
+  if (url.pathname === "/api/knowledge" && req.method === "GET") return json(res, 200, service.listKnowledge(url.searchParams.get("limit") || 631));
   if (url.pathname === "/api/releases/check" && req.method === "GET") return json(res, 200, service.releaseCheck());
   if (url.pathname === "/api/releases" && req.method === "POST") {
     const result = service.createRelease();

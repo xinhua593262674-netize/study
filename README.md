@@ -58,6 +58,7 @@ npm run serve
 export ECONOMY_SOURCE_DIR="/path/to/经济科目资料"
 npm run import:knowledge
 npm run import:questions
+npm run import:textbook
 npm run import:associations
 ```
 

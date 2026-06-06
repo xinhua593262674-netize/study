@@ -156,14 +156,23 @@ function seed(db) {
     WHERE id = 'econ-2025-finance-eval'
   `).run(sample[3], sample[4], sample[5], sample[6]);
 
-  const options = [
+  const fallbackOptions = [
     ["eval-a", "econ-2025-finance-eval", "A", "经济效率分析", 0],
     ["eval-b", "econ-2025-finance-eval", "B", "宏观经济合理性分析", 0],
     ["eval-c", "econ-2025-finance-eval", "C", "偿债能力分析", 1],
     ["eval-d", "econ-2025-finance-eval", "D", "社会影响分析", 0]
   ];
   const insertOption = db.prepare("INSERT INTO options VALUES (?, ?, ?, ?, ?)");
-  for (const row of options) insertOption.run(...row);
+  if (fs.existsSync(questionFile)) {
+    const importedQuestions = JSON.parse(fs.readFileSync(questionFile, "utf8"));
+    for (const question of importedQuestions) {
+      for (const [optionIndex, option] of (question.options || []).entries()) {
+        insertOption.run(`${question.id}-${option.label}-${optionIndex}`, question.id, option.label, option.content, option.isCorrect ? 1 : 0);
+      }
+    }
+  } else {
+    for (const row of fallbackOptions) insertOption.run(...row);
+  }
 
   db.prepare("INSERT INTO associations VALUES (?, ?, ?, ?, ?, ?, ?)").run(
     "assoc-finance-eval",
@@ -190,6 +199,7 @@ function synchronizeAssociations(db) {
     VALUES (?, ?, ?, '主要知识点', ?, ?, '待补充精确教材页码')
   `);
   const normalize = (value) => String(value || "")
+    .normalize("NFKC")
     .replace(/^[?.\d]+/, "")
     .replace(/[（）()、，,：:\s]/g, "")
     .replace(/的|和|与|及/g, "")

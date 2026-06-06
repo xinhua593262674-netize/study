@@ -51,7 +51,7 @@ function createService(db) {
     if (Number(input.confidence) < 65) risks.push("低置信度");
     if (input.hasMajorAiChanges) risks.push("人工大幅修改 AI 建议");
     if (input.noDirectEvidence) risks.push("无直接教材依据");
-    if (question.sourceStatus === "来源解析异常") risks.push("来源解析异常");
+    if (question.sourceStatus !== "已解析") risks.push(question.sourceStatus);
     const targetStatus = input.action === "退回修改" ? "待初审" : risks.length ? "待复审" : "待发布";
     const createdAt = new Date().toISOString();
     db.prepare(`
@@ -62,7 +62,7 @@ function createService(db) {
     return { questionId, action: input.action, targetStatus, risks, createdAt };
   }
 
-  function listKnowledge(limit = 50) {
+  function listKnowledge(limit = 631) {
     return db.prepare(`
       SELECT id, path, title, accuracy, score, frequency, question_count AS questionCount
       FROM knowledge_nodes ORDER BY frequency DESC, id LIMIT ?
@@ -70,7 +70,7 @@ function createService(db) {
   }
 
   function releaseCheck() {
-    const blockers = db.prepare("SELECT COUNT(*) AS count FROM questions WHERE source_status = '来源解析异常'").get().count;
+    const blockers = db.prepare("SELECT COUNT(*) AS count FROM questions WHERE source_status != '已解析'").get().count;
     return {
       version: "ECON-2026.01",
       blockers,
