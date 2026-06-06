@@ -28,6 +28,12 @@
     }
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+    })[char]);
+  }
+
   function normalizeLocalQuestion(item, index) {
     return {
       id: item.id || `local-${index}`,
@@ -43,6 +49,97 @@
       associations: item.associations || [],
       reviews: item.reviews || [],
     };
+  }
+
+  function hydrateAllQuestionDrawer() {
+    const drawer = $(".question-drawer");
+    if (!drawer) return;
+    const data = getLocalData();
+    const questions = data?.questions?.map(normalizeLocalQuestion) || [];
+    const knowledge = data?.knowledge || [];
+    const triggerCount = $(".all-questions-trigger b");
+    if (triggerCount) triggerCount.textContent = questions.length || 397;
+    $(".drawer-count").textContent = questions.length
+      ? `${questions.length} 道真题 · ${knowledge.length} 个知识考点 · 全站共享`
+      : "请点击顶部“加载本机真实数据”";
+    if (!questions.length) return;
+
+    const year = $(".drawer-year");
+    const type = $(".drawer-type");
+    if (year.options.length === 1) {
+      [...new Set(questions.map((item) => item.year))].sort((a, b) => b - a).forEach((value) => year.add(new Option(`${value} 年`, value)));
+      [...new Set(questions.map((item) => item.type))].sort().forEach((value) => type.add(new Option(value, value)));
+    }
+
+    function showQuestion(question, index) {
+      const raw = data.questions[index] || {};
+      $(".drawer-detail").innerHTML = `<div class="drawer-detail-content">
+        <div class="drawer-meta"><span class="badge b">${escapeHtml(question.year)} 年</span><span class="badge">${escapeHtml(question.type)}</span><span class="badge a">${escapeHtml(question.sourceStatus)}</span><span class="badge g">第 ${index + 1} / ${questions.length} 题</span></div>
+        <h2>${escapeHtml(question.stem)}</h2>
+        <p><b>关联考点：</b>${escapeHtml(raw.knowledge || "待人工关联")}</p>
+        <p><b>正确答案：</b><span class="blue">${escapeHtml(question.answer)}</span></p>
+        <div class="analysis"><b>真题解析</b><br>${escapeHtml(question.analysis)}</div>
+        <p class="muted">来源：${escapeHtml(question.sourcePage)}</p>
+      </div>`;
+      $$(".drawer-question").forEach((item) => item.classList.toggle("active", Number(item.dataset.index) === index));
+      document.dispatchEvent(new CustomEvent("real-question:selected", { detail: { question, raw, index, total: questions.length } }));
+    }
+
+    function renderList() {
+      const keyword = $(".drawer-search").value.trim().toLowerCase();
+      const selectedYear = year.value;
+      const selectedType = type.value;
+      const matches = questions.map((question, index) => ({ question, index })).filter(({ question, index }) => {
+        const raw = data.questions[index] || {};
+        const content = `${question.stem} ${question.analysis} ${raw.knowledge || ""}`.toLowerCase();
+        return (!keyword || content.includes(keyword))
+          && (!selectedYear || String(question.year) === selectedYear)
+          && (!selectedType || question.type === selectedType);
+      });
+      $(".drawer-count").textContent = `${matches.length} / ${questions.length} 道真题 · ${knowledge.length} 个知识考点`;
+      $(".drawer-list").innerHTML = matches.length ? matches.map(({ question, index }) => `<div class="drawer-question" data-index="${index}">
+        <div class="drawer-question-top"><b>${escapeHtml(question.year)} · ${escapeHtml(question.type)}</b><span class="badge">${escapeHtml(question.answer)}</span></div>
+        <p>${escapeHtml(question.stem)}</p>
+      </div>`).join("") : `<div class="drawer-empty">没有符合条件的真题</div>`;
+      $$(".drawer-question").forEach((item) => item.addEventListener("click", () => {
+        const index = Number(item.dataset.index);
+        showQuestion(questions[index], index);
+      }));
+      if (matches.length) showQuestion(matches[0].question, matches[0].index);
+    }
+
+    renderList();
+    $(".drawer-search").oninput = renderList;
+    year.onchange = renderList;
+    type.onchange = renderList;
+  }
+
+  function ensureAllQuestionDrawer() {
+    if ($(".question-drawer")) return;
+    document.body.insertAdjacentHTML("beforeend", `<button class="all-questions-trigger" type="button"><b>397</b><span>全部真题</span></button><div class="question-drawer-backdrop"></div>
+      <aside class="question-drawer" aria-label="全部真实真题"><div class="question-drawer-head"><div><b>经济科目全部真实真题</b><span class="drawer-count">等待加载本机数据</span></div><button class="drawer-close" type="button">×</button></div><div class="question-drawer-filters"><input class="drawer-search" placeholder="搜索题干、解析、考点"><select class="drawer-year"><option value="">全部年份</option></select><select class="drawer-type"><option value="">全部题型</option></select></div><div class="question-drawer-body"><div class="drawer-list"></div><div class="drawer-detail"><div class="drawer-empty"><b>请先加载本机真实数据</b><p>只需加载一次，所有页面都会自动读取。</p></div></div></div></aside>`);
+  }
+
+  function bindAllQuestionDrawer() {
+    const drawer = $(".question-drawer");
+    if (!drawer) return;
+    const backdrop = $(".question-drawer-backdrop");
+    const trigger = $(".all-questions-trigger");
+    const closeButton = $(".drawer-close");
+    const open = () => {
+      drawer.classList.add("open");
+      backdrop.classList.add("open");
+      hydrateAllQuestionDrawer();
+    };
+    const close = () => {
+      drawer.classList.remove("open");
+      backdrop.classList.remove("open");
+    };
+    markBound(trigger);
+    markBound(closeButton);
+    trigger.onclick = open;
+    closeButton.onclick = close;
+    backdrop.onclick = close;
   }
 
   function bindLocalDataImport() {
@@ -65,6 +162,7 @@
       button.textContent = `已加载真实数据 ${loaded.questions.length} 题`;
       toast(`真实数据已在本机浏览器加载：${loaded.questions.length} 题、${loaded.knowledge.length} 个考点`, "success");
       if ($(".queue")) renderLocalQueue(loaded.questions);
+      hydrateAllQuestionDrawer();
     });
   }
 
@@ -477,12 +575,15 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    ensureAllQuestionDrawer();
     bindReviewWorkspace();
     bindSecondaryPages();
     bindLocalDataImport();
     hydrateReviewState();
     hydrateQuestionQueue();
     hydrateReleaseState();
+    bindAllQuestionDrawer();
+    hydrateAllQuestionDrawer();
     bindFallbackButtons();
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();
