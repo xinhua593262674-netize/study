@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教研解析平台 - 按真题审核工作台</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --nav: #17213a; --nav2: #202d4d; --primary: #3159d9; --primary-soft: #eef2ff;
+      --bg: #f3f5f9; --card: #fff; --line: #e4e8f0; --text: #253047; --muted: #737d90;
+      --green: #15966a; --green-soft: #eaf8f2; --amber: #d88724; --amber-soft: #fff6e8;
+      --red: #d84a4a; --red-soft: #fff0f0; --shadow: 0 8px 28px rgba(32,45,77,.08);
+    }
+    body { margin: 0; min-width: 1380px; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+    button { font: inherit; cursor: pointer; }
+    .app { display: grid; grid-template-columns: 218px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--nav); color: #cbd3e6; padding: 22px 14px; }
+    .brand { display: flex; gap: 11px; align-items: center; color: white; font-weight: 700; font-size: 16px; padding: 0 10px 24px; }
+    .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(145deg,#6f8cff,#3159d9); display:grid; place-items:center; box-shadow:0 6px 16px rgba(49,89,217,.35); }
+    .logo svg { width:18px; fill:white; }
+    .nav-label { color: #7785a6; font-size: 11px; letter-spacing: 1px; padding: 16px 10px 7px; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:10px 11px; margin:3px 0; border-radius:7px; color:#bec8df; text-decoration:none; }
+    .nav-item.active { color:white; background:var(--nav2); box-shadow: inset 3px 0 var(--primary); }
+    .nav-item svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.8; }
+    .nav-count { margin-left:auto; min-width:22px; padding:1px 6px; border-radius:10px; background:#34415f; font-size:11px; text-align:center; }
+    .side-foot { position:fixed; left:14px; bottom:18px; width:190px; padding:12px; border:1px solid #2c3a5d; border-radius:9px; background:#1b2743; }
+    .side-foot strong { display:block; color:white; font-size:12px; }
+    .side-foot span { color:#8290ad; font-size:11px; }
+    main { min-width:0; }
+    .topbar { height:64px; padding:0 22px; background:white; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:18px; }
+    .title { font-size:17px; font-weight:700; }
+    .crumb { color:var(--muted); font-size:12px; }
+    .top-meta { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .select, .top-tag { padding:6px 10px; border:1px solid var(--line); border-radius:6px; color:#59647a; background:#fafbfc; font-size:12px; }
+    .top-tag { color:var(--green); background:var(--green-soft); border-color:#cfeee1; }
+    .avatar { width:30px; height:30px; border-radius:50%; background:#e8edff; color:var(--primary); font-weight:700; display:grid; place-items:center; }
+    .summary { margin:16px 18px 12px; padding:10px 14px; background:white; border:1px solid var(--line); border-radius:9px; display:flex; align-items:center; gap:18px; box-shadow:0 2px 10px rgba(32,45,77,.03); }
+    .progress-title { font-weight:600; font-size:13px; }
+    .bar { width:180px; height:6px; background:#edf0f5; border-radius:6px; overflow:hidden; }
+    .bar span { display:block; width:68%; height:100%; background:var(--primary); border-radius:6px; }
+    .stats { display:flex; gap:20px; margin-left:auto; }
+    .stat { display:flex; gap:7px; align-items:baseline; color:var(--muted); font-size:12px; }
+    .stat b { font-size:16px; color:var(--text); }
+    .stat.warn b { color:var(--amber); }
+    .workspace { margin:0 18px 84px; display:grid; grid-template-columns:270px minmax(470px,1fr) 440px; gap:12px; height:calc(100vh - 176px); min-height:650px; }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:9px; overflow:hidden; box-shadow:0 2px 10px rgba(32,45,77,.025); }
+    .panel-head { height:48px; padding:0 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; font-weight:650; }
+    .head-count { color:var(--muted); font-size:11px; font-weight:400; }
+    .filter { margin-left:auto; color:var(--primary); font-size:12px; }
+    .queue { height:calc(100% - 48px); overflow:auto; }
+    .q-item { padding:13px 14px; border-bottom:1px solid #edf0f5; position:relative; }
+    .q-item.active { background:var(--primary-soft); }
+    .q-item.active:before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); }
+    .q-top { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
+    .q-num { color:var(--text); font-weight:700; font-size:13px; }
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:11px; font-size:11px; white-space:nowrap; }
+    .badge.blue { background:#e9efff; color:var(--primary); }
+    .badge.amber { background:var(--amber-soft); color:var(--amber); }
+    .badge.green { background:var(--green-soft); color:var(--green); }
+    .badge.red { background:var(--red-soft); color:var(--red); }
+    .badge.gray { background:#f0f2f6; color:#778196; }
+    .q-text { margin:7px 0 8px; font-size:12px; line-height:1.6; color:#455168; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .q-foot { color:#8a93a5; font-size:11px; display:flex; justify-content:space-between; }
+    .center { overflow:auto; padding-bottom:18px; }
+    .question-meta { padding:14px 18px 10px; display:flex; align-items:center; gap:7px; }
+    .source { margin-left:auto; color:var(--primary); font-size:12px; }
+    .question { padding:2px 18px 14px; font-size:15px; line-height:1.85; font-weight:550; }
+    .options { padding:0 14px; }
+    .option { margin:8px 0; border:1px solid var(--line); border-radius:8px; display:grid; grid-template-columns:34px 1fr auto; align-items:start; gap:10px; padding:11px 12px; transition:.15s; }
+    .option:hover { border-color:#b8c5ee; }
+    .option.active { border-color:#8da3ed; background:#f7f9ff; box-shadow:0 0 0 2px #edf1ff; }
+    .option.correct { border-left:3px solid var(--green); }
+    .option.wrong { border-left:3px solid var(--amber); }
+    .letter { width:28px; height:28px; border:1px solid #d8deea; border-radius:50%; display:grid; place-items:center; font-weight:700; background:white; }
+    .option.active .letter { color:white; background:var(--primary); border-color:var(--primary); }
+    .option-text { line-height:1.7; }
+    .option-notes { margin-top:5px; display:flex; gap:5px; }
+    .switcher { margin:18px 18px 10px; border-top:1px solid var(--line); padding-top:16px; display:flex; align-items:center; gap:8px; }
+    .switcher strong { font-size:13px; }
+    .unit-tab { border:1px solid var(--line); background:white; color:var(--muted); border-radius:5px; padding:4px 8px; font-size:11px; }
+    .unit-tab.active { background:var(--primary); color:white; border-color:var(--primary); }
+    .analysis-box { margin:0 18px; padding:12px 14px; border-radius:8px; background:#f8f9fb; border:1px solid var(--line); color:#566177; font-size:12px; }
+    .right { overflow:auto; background:#f8f9fc; }
+    .tabs { display:flex; background:white; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
+    .tab { padding:14px 16px 11px; color:var(--muted); font-size:12px; border-bottom:2px solid transparent; }
+    .tab.active { color:var(--primary); border-color:var(--primary); font-weight:650; }
+    .section { padding:13px 13px 0; }
+    .section-title { display:flex; align-items:center; gap:7px; margin:2px 1px 9px; font-size:12px; font-weight:700; color:#4b566c; }
+    .confidence { margin-left:auto; color:var(--amber); font-weight:500; }
+    .suggest-card { background:white; border:1px solid var(--line); border-left:3px solid var(--primary); border-radius:8px; padding:11px 12px; margin-bottom:9px; box-shadow:0 2px 8px rgba(32,45,77,.025); }
+    .suggest-top { display:flex; align-items:center; gap:6px; }
+    .suggest-title { font-weight:650; font-size:13px; }
+    .path { margin-top:5px; color:var(--muted); font-size:11px; }
+    .reason { margin-top:8px; padding-top:8px; border-top:1px dashed #e3e7ee; color:#687286; font-size:11px; }
+    .card-actions { margin-top:9px; display:flex; gap:7px; }
+    .mini-btn { border:1px solid var(--line); border-radius:5px; padding:4px 8px; background:white; color:#5f6b81; font-size:11px; }
+    .mini-btn.accept { border-color:#bfe6d7; color:var(--green); background:var(--green-soft); }
+    .evidence { background:white; border:1px solid var(--line); border-radius:8px; margin-bottom:9px; overflow:hidden; }
+    .evidence-head { padding:8px 10px; background:#f7f8fb; border-bottom:1px solid var(--line); display:flex; align-items:center; font-size:11px; color:var(--muted); }
+    .ev-num { margin-right:7px; width:19px; height:19px; border-radius:50%; display:grid; place-items:center; background:var(--primary); color:white; font-weight:700; }
+    .page-link { margin-left:auto; color:var(--primary); }
+    .quote { padding:10px 11px 11px; color:#3f4a60; font-size:12px; line-height:1.75; }
+    mark { background:#fff0a9; color:inherit; padding:1px 2px; }
+    .alert { margin:0 13px 13px; padding:10px 11px; background:var(--amber-soft); border:1px solid #f4ddbd; border-radius:7px; color:#9a641d; font-size:11px; display:flex; gap:8px; }
+    .alert b { display:block; color:#855313; font-size:12px; }
+    .footer { position:fixed; left:218px; right:0; bottom:0; height:72px; background:rgba(255,255,255,.96); backdrop-filter:blur(8px); border-top:1px solid var(--line); display:flex; align-items:center; padding:0 20px; gap:9px; z-index:5; box-shadow:0 -6px 20px rgba(32,45,77,.06); }
+    .autosave { color:var(--muted); font-size:11px; }
+    .footer-actions { margin-left:auto; display:flex; gap:9px; }
+    .btn { height:36px; padding:0 15px; border-radius:6px; border:1px solid var(--line); background:white; color:#536078; }
+    .btn.warn { color:var(--amber); border-color:#e9c897; background:#fffaf2; }
+    .btn.primary { color:white; background:var(--primary); border-color:var(--primary); box-shadow:0 5px 14px rgba(49,89,217,.22); }
+    .btn.primary:after { content:" →"; }
+    .legend { display:flex; gap:11px; align-items:center; color:var(--muted); font-size:11px; }
+    .dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; background:var(--primary); }
+  </style>
+</head>
+<body data-question-id="econ-2025-finance-eval">
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="logo"><svg viewBox="0 0 24 24"><path d="M5 3h10a4 4 0 0 1 4 4v14H8a3 3 0 0 1-3-3V3Zm3 3v10.2c.6-.2 1.2-.2 2-.2h6V7a1 1 0 0 0-1-1H8Z"/></svg></div>教研解析平台</div>
+      <div class="nav-label">核心工作</div>
+      <a class="nav-item active" href="index.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>按真题审核<span class="nav-count">38</span></a>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m15 9-6 6m0-6 6 6"/></svg>复审队列<span class="nav-count">7</span></div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>按知识点审核</div>
+      <div class="nav-label">数据准备</div>
+      <a class="nav-item" href="textbook-validation.html"><svg viewBox="0 0 24 24"><path d="M4 4h7v16H4zM13 4h7v16h-7z"/></svg>教材解析验收</a>
+      <a class="nav-item" href="knowledge-diff.html"><svg viewBox="0 0 24 24"><path d="M4 7h16M7 4v16m10-16v16M4 17h16"/></svg>知识体系差异</a>
+      <div class="nav-label">发布与成果</div>
+      <a class="nav-item" href="release.html"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>发布管理<span class="nav-count">12</span></a>
+      <a class="nav-item" href="knowledge-table.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M9 5v14"/></svg>教研大宽表</a>
+      <a class="nav-item" href="textbook-preview.html"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>教材预览</a>
+      <a class="nav-item" href="knowledge-graph.html"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 8-4m-8 6 8 4"/></svg>知识图谱</a>
+      <div class="side-foot"><strong>当前工作版本 ECON-2026.01</strong><span>真实数据：2026 教材及 2021—2025 真题</span></div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div><div class="title">按真题审核</div><div class="crumb">审核工作台 / 客观题初审</div></div>
+        <div class="top-meta"><div class="select">一级建造师 · 建设工程经济⌄</div><div class="select">2026 版教材⌄</div><div class="top-tag">真实数据处理中</div><div class="avatar">林</div></div>
+      </header>
+      <section class="summary">
+        <div><div class="progress-title">经济科目真实数据接入 5 / 5 年</div><div class="bar"><span style="width:100%"></span></div></div>
+        <div class="legend"><span><i class="dot"></i>当前审核</span><span><i class="dot" style="background:#15966a"></i>已通过</span><span><i class="dot" style="background:#d88724"></i>待复审</span></div>
+        <div class="stats"><div class="stat"><b>397</b> 真题记录</div><div class="stat"><b>631</b> 知识考点</div><div class="stat warn"><b>5</b> 来源解析异常</div></div>
+      </section>
+      <section class="workspace">
+        <aside class="panel">
+          <div class="panel-head">真实真题样本 <span class="head-count">2021—2025</span><span class="filter">筛选⌄</span></div>
+          <div class="queue">
+            <div class="q-item active"><div class="q-top"><span class="q-num">2025 · 单选题</span><span class="badge gray">真实题目</span></div><div class="q-text">下列方案经济效果评价内容中，属于财务评价的是...</div><div class="q-foot"><span>4 个审核单元</span><span class="badge green">答案 C</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2025 · 单选题</span><span class="badge gray">真实题目</span></div><div class="q-text">关于设备寿命的说法，正确的是...</div><div class="q-foot"><span>4 个审核单元</span><span class="badge green">答案 B</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2025 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">绘制现金流量图必需的要素有...</div><div class="q-foot"><span>5 个审核单元</span><span class="badge green">答案 BCD</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2024 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">采用成本分析法确定最佳现金持有量时，应考虑的成本有...</div><div class="q-foot"><span>5 个审核单元</span><span>待初审</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2023 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">现金管理可以采用的方法有...</div><div class="q-foot"><span>5 个审核单元</span><span>待初审</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2021 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">下列会计要素中，属于静态会计要素的有...</div><div class="q-foot"><span>5 个审核单元</span><span class="badge amber">来源解析异常</span></div></div>
+          </div>
+        </aside>
+        <article class="panel center">
+          <div class="panel-head">真题内容 <span class="head-count">来源可信等级 A</span><span class="filter">查看原始试卷 ↗</span></div>
+          <div class="question-meta"><span class="badge gray">单选题</span><span class="badge gray">2025 年真题</span><span class="badge green">仍然有效</span><span class="source">原始文件 P.2 / 25</span></div>
+          <div class="question">下列方案经济效果评价内容中，属于财务评价的是（&nbsp;&nbsp;）。</div>
+          <div class="options">
+            <div class="option wrong"><div class="letter">A</div><div><div class="option-text">经济效率分析</div><div class="option-notes"><span class="badge amber">错误选项</span><span class="badge gray">经济分析</span></div></div><span class="badge green">已完成</span></div>
+            <div class="option wrong"><div class="letter">B</div><div><div class="option-text">宏观经济合理性分析</div><div class="option-notes"><span class="badge amber">错误选项</span><span class="badge gray">经济分析</span></div></div><span class="badge green">已完成</span></div>
+            <div class="option active correct"><div class="letter">C</div><div><div class="option-text">偿债能力分析</div><div class="option-notes"><span class="badge green">正确选项</span><span class="badge blue">当前审核单元</span></div></div><span class="badge amber">待确认</span></div>
+            <div class="option wrong"><div class="letter">D</div><div><div class="option-text">社会影响分析</div><div class="option-notes"><span class="badge amber">错误选项</span><span class="badge gray">经济分析</span></div></div><span class="badge gray">未审核</span></div>
+          </div>
+          <div class="switcher"><strong>选项解析</strong><button class="unit-tab active">C 选项</button><button class="unit-tab">答案依据</button><button class="unit-tab">关联考点</button></div>
+          <div class="analysis-box"><b>正确答案：C</b><br><b>真题解析：</b>方案财务评价主要侧重盈利能力、偿债能力以及财务可持续能力；经济效率、宏观经济合理性和社会影响属于经济分析。</div>
+        </article>
+        <aside class="panel right">
+          <div class="tabs"><div class="tab active">知识关联</div><div class="tab">教材依据</div><div class="tab">变更记录</div></div>
+          <div class="section">
+            <div class="section-title">AI 知识点建议 <span class="confidence">综合置信度 72%</span></div>
+            <div class="suggest-card"><div class="suggest-top"><span class="badge blue">主要知识点</span><span class="suggest-title">2.1.1.2 财务评价的内容</span><span class="badge green">96%</span></div><div class="path">第 1 篇工程经济 › 第 2 章经济效果评价 › 2.1 经济效果评价内容</div><div class="reason">真实考点 ID：300074625；知识体系表记录考频 1、总题数 1、正确率 87.20%。</div><div class="card-actions"><button class="mini-btn accept">✓ 接受建议</button><button class="mini-btn">修改</button><button class="mini-btn">拒绝</button></div></div>
+            <div class="suggest-card" style="border-left-color:#9ba6bc"><div class="suggest-top"><span class="badge gray">相关知识点</span><span class="suggest-title">2.1.1.1 经济效果评价的分类</span><span class="badge green">88%</span></div><div class="path">第 1 篇工程经济 › 第 2 章经济效果评价</div><div class="card-actions"><button class="mini-btn accept">✓ 接受建议</button><button class="mini-btn">修改</button><button class="mini-btn">拒绝</button></div></div>
+          </div>
+          <div class="section">
+            <div class="section-title">精确教材依据 <span class="head-count">已选择 2 个片段</span><span class="filter">+ 补充依据</span></div>
+            <div class="evidence"><div class="evidence-head"><span class="ev-num">1</span>直接教材依据 <span class="page-link">教材 P.16—17 ↗</span></div><div class="quote">方案财务评价的内容主要侧重于盈利能力、偿债能力以及财务可持续能力三方面的评价分析。</div></div>
+            <div class="evidence"><div class="evidence-head"><span class="ev-num">2</span>相关教材内容 <span class="page-link">教材 P.16 ↗</span></div><div class="quote">财务评价是在国家现行财税制度和价格体系下，从拟建项目的角度出发，分析项目的盈利能力和偿债能力，评价项目在财务上的可行性。</div></div>
+          </div>
+          <div class="section">
+            <div class="section-title">人工审核结果</div>
+            <div class="suggest-card" style="border-left-color:#15966a"><div class="suggest-top"><span class="badge green">答案一致</span><span class="suggest-title">真题解析与 2026 教材一致</span></div><div class="reason">正确选项：<mark>偿债能力分析</mark><br>来源：2025 年一级建造师《建设工程经济》真题答案及解析。</div><div class="card-actions"><button class="mini-btn">编辑解析</button><button class="mini-btn">查看来源</button></div></div>
+          </div>
+          <div class="alert"><span>⚠</span><div><b>来源文件存在字体编码缺失</b>题号及部分数字无法可靠抽取；题干语义、答案、解析与关联考点可正常审核。</div></div>
+        </aside>
+      </section>
+      <footer class="footer"><div class="autosave">已自动暂存 · 14:32:18</div><div class="footer-actions"><button class="btn">上一题</button><button class="btn">暂存并下一题</button><button class="btn warn">退回修改</button><button class="btn primary">提交复审</button></div></footer>
+    </main>
+  </div>
+  <script src="review-state.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

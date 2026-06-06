@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "functions": { "api/index.js": {} },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.js" }
+  ],
+  "redirects": [
+    { "source": "/", "destination": "/ui/index.html", "permanent": false }
+  ]
+}

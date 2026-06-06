@@ -1,0 +1,12 @@
+{
+  "name": "research-analysis-prototype",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "node server/app.js",
+    "start": "node server/app.js",
+    "import:knowledge": "node scripts/import-knowledge.mjs",
+    "import:questions": "python3 scripts/import-questions.py",
+    "import:associations": "node scripts/import-associations.js"
+  }
+}
