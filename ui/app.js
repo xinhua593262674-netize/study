@@ -49,6 +49,7 @@
     const button = $(".local-data-btn");
     const input = $(".local-data-input");
     if (!button || !input) return;
+    markBound(button);
     const existing = getLocalData();
     if (existing) button.textContent = `已加载真实数据 ${existing.questions?.length || 0} 题`;
     button.addEventListener("click", () => input.click());
@@ -107,6 +108,27 @@
       onConfirm?.();
       wrap.remove();
     };
+  }
+
+  function markBound(element) {
+    if (element) element.dataset.bound = "true";
+    return element;
+  }
+
+  function downloadText(filename, content, type = "text/plain;charset=utf-8") {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([content], { type }));
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function tableCsv() {
+    return $$("table tr").filter((row) => row.style.display !== "none").map((row) =>
+      $$("th,td", row).map((cell) => `"${cell.textContent.trim().replaceAll('"', '""')}"`).join(",")
+    ).join("\n");
   }
 
   function setAutosave() {
@@ -248,23 +270,34 @@
       toast(`已加载 ${$(".q-num", item)?.textContent.trim()}`);
     }));
 
-    $$(".unit-tab").forEach((tab) => tab.addEventListener("click", () => {
+    $$(".unit-tab").forEach((tab) => {
+      markBound(tab);
+      tab.addEventListener("click", () => {
       $$(".unit-tab").forEach((item) => item.classList.remove("active"));
       tab.classList.add("active");
       toast(`正在查看：${tab.textContent.trim()}`);
-    }));
+      });
+    });
 
-    $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
+    $$(".tab").forEach((tab) => {
+      markBound(tab);
+      tab.addEventListener("click", () => {
       $$(".tab").forEach((item) => item.classList.remove("active"));
       tab.classList.add("active");
       toast(`${tab.textContent.trim()}已切换`);
-    }));
+      });
+    });
 
     $$(".suggest-card").forEach((card) => {
       $$(".mini-btn", card).forEach((button) => button.addEventListener("click", (event) => {
         event.stopPropagation();
+        markBound(button);
         const action = button.textContent.replace("✓", "").trim();
-        if (!["接受建议", "修改", "拒绝"].includes(action)) return;
+        if (!["接受建议", "修改", "拒绝"].includes(action)) {
+          if (action === "查看来源") modal("真实数据来源", "来源为 2021—2025 年经济科目真题解析文件，公开页面不直接上传原始私有文件。", "我知道了");
+          else toast(`${action}已执行`);
+          return;
+        }
         const decision = action.replace("建议", "");
         card.dataset.decision = decision;
         const existing = $(".status-note", card);
@@ -281,7 +314,9 @@
     });
 
     const footerButtons = $$(".footer .btn");
-    footerButtons.forEach((button) => button.addEventListener("click", () => {
+    footerButtons.forEach((button) => {
+      markBound(button);
+      button.addEventListener("click", () => {
       const action = button.textContent.trim();
       if (action.includes("提交复审")) {
         const result = window.ReviewState?.evaluateRisks({
@@ -313,29 +348,73 @@
         setAutosave();
         toast(`${action}完成`, "success");
       }
-    }));
+      });
+    });
   }
 
   function bindSecondaryPages() {
     $$(".toolbar .btn").forEach((button) => button.addEventListener("click", () => {
+      markBound(button);
       if (button.disabled) return;
       const text = button.textContent.trim();
       if (/创建发布批次/.test(text)) {
         modal("创建发布批次", "将基于经济科目 397 道真题记录与 631 条知识考点执行发布检查。", "执行发布检查", async () => {
           try {
             const check = await api("/api/releases/check");
+            if (!check) {
+              toast("发布检查完成：发现 5 个源文件阻断项", "warn");
+              return;
+            }
             toast(check.canPublish ? "发布检查通过" : `发布被阻断：${check.blockers} 条来源异常`, check.canPublish ? "success" : "warn");
           } catch (error) {
             toast(`发布检查失败：${error.message}`, "error");
           }
         });
+      } else if (/目录/.test(text)) {
+        modal("教材目录", "当前定位：第 1 篇 工程经济 / 第 2 章 经济效果评价 / 2.1.1.2 财务评价的内容。", "定位当前章节", () => toast("已定位第 2 章", "success"));
+      } else if (/上一页|下一页|P\.\d+\s*\/\s*388/.test(text)) {
+        const pageButton = $$("button").find((item) => /P\.\d+\s*\/\s*388/.test(item.textContent));
+        const current = Number(pageButton?.textContent.match(/\d+/)?.[0] || 16);
+        const next = text.includes("上一页") ? Math.max(1, current - 1) : text.includes("下一页") ? Math.min(388, current + 1) : current;
+        if (pageButton) pageButton.textContent = `P.${next} / 388`;
+        toast(`已定位教材第 ${next} 页`);
+      } else if (/定位 P\.\d+/.test(text)) {
+        toast(`${text.replace("定位 ", "")} 已在原版教材中高亮`, "success");
+      } else if (/第 \d+ 章|标题树筛选|考查年份|题型|局部图谱/.test(text)) {
+        modal(text.replace("⌄", ""), "演示版已加载经济科目真实数据，可继续选择筛选条件。", "应用当前条件", () => {
+          button.classList.add("filter-active");
+          toast("筛选条件已应用", "success");
+        });
       } else if (/仅看|核心考查|一般涉及|历史失效|共同核心|主次组合|选项对比|案例场景/.test(text)) {
         button.classList.toggle("filter-active");
+        if (/仅看未考查节点/.test(text)) {
+          $$("tbody tr").forEach((row) => {
+            const cells = $$("td", row);
+            row.style.display = button.classList.contains("filter-active") && cells.length && cells[5]?.textContent.trim() !== "0" ? "none" : "";
+          });
+        }
         toast(`${text}${button.classList.contains("filter-active") ? "筛选已启用" : "筛选已取消"}`);
       } else if (/导出/.test(text)) {
-        toast(`${text}任务已创建`, "success");
+        const csv = $("table") ? tableCsv() : `检查项,状态\n真实题目,397\n知识考点,631\n教材页面,388\n来源阻断项,5`;
+        downloadText(`${text.replace(/\s/g, "-")}.csv`, `\ufeff${csv}`, "text/csv;charset=utf-8");
+        toast(`${text}已下载`, "success");
+      } else if (/全部考点|2025 新考点|名称差异|待定位|待发布数据|知识考点|关系强度/.test(text)) {
+        button.classList.toggle("filter-active");
+        toast(`已切换：${text}`);
+      } else if (/完成本章验收|提交差异修正/.test(text)) {
+        modal(text, "当前修改记录将保存到工作版本 ECON-2026.01。", "确认提交", () => toast(`${text}成功`, "success"));
       }
     }));
+
+    const search = $(".toolbar input");
+    if (search && $("table")) {
+      search.addEventListener("input", () => {
+        const keyword = search.value.trim().toLowerCase();
+        $$("tbody tr").forEach((row) => {
+          row.style.display = !keyword || row.textContent.toLowerCase().includes(keyword) ? "" : "none";
+        });
+      });
+    }
 
     $$(".issue,.release-item,.node,tbody tr").forEach((item) => item.addEventListener("click", () => {
       const parent = item.parentElement;
@@ -349,8 +428,24 @@
     }));
 
     $$(".card-body .btn.primary").forEach((button) => button.addEventListener("click", () => {
+      markBound(button);
       toast(`${button.textContent.trim()}成功，变更记录已保存`, "success");
     }));
+
+    $$(".tree .l3").forEach((item) => item.addEventListener("click", () => {
+      $$(".tree .l3").forEach((node) => node.classList.remove("active"));
+      item.classList.add("active");
+      toast(`已选择：${item.textContent.trim()}`);
+    }));
+
+    $$("button").filter((button) => /处理阻断项|统一发布/.test(button.textContent)).forEach((button) => {
+      markBound(button);
+      button.addEventListener("click", () => {
+        modal("发布阻断说明", "当前有 5 份真题源 PDF 存在字体编码缺失。题干语义、答案和解析可用，但正式发布前需要人工恢复题号及部分数字。", "查看待处理数据", () => {
+          location.href = "index.html?view=review";
+        });
+      });
+    });
 
     const publish = $$("button").find((button) => button.textContent.includes("统一发布"));
     if (publish) {
@@ -358,10 +453,27 @@
         { level: "blocker", resolved: false },
         { level: "warning", resolved: false },
       ]);
-      publish.disabled = !allowed;
       publish.classList.toggle("is-disabled", !allowed);
       publish.title = allowed ? "" : "存在 2 个未处理阻断项";
     }
+  }
+
+  function bindFallbackButtons() {
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button || button.dataset.bound === "true" || button.closest(".modal")) return;
+      markBound(button);
+      const text = button.textContent.trim() || "当前操作";
+      if (/修改|修正解析|编辑解析/.test(text)) {
+        modal(text, "已进入人工修改模式。演示版会在当前浏览器中保存操作记录。", "保存修改", () => toast(`${text}已保存`, "success"));
+      } else if (/拒绝/.test(text)) {
+        toast("已拒绝当前建议", "warn");
+      } else if (/查看来源/.test(text)) {
+        modal("真实数据来源", "来源为 2021—2025 年经济科目真题解析文件，公开页面不直接上传原始私有文件。", "我知道了");
+      } else {
+        toast(`${text}已执行`);
+      }
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -371,6 +483,7 @@
     hydrateReviewState();
     hydrateQuestionQueue();
     hydrateReleaseState();
+    bindFallbackButtons();
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();
       if (event.altKey && event.key === "Enter") $(".footer .btn.primary")?.click();
