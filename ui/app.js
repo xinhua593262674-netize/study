@@ -149,13 +149,35 @@
     const questions = data?.questions?.map(normalizeLocalQuestion) || [];
     if (!questions.length) return;
 
+    function renderPreviewQuestion(question, raw, index) {
+      if (document.title !== "教材预览") return false;
+      const doc = $(".doc");
+      const pageButton = $$("button").find((button) => /第\s*\d+\s*\/\s*\d+\s*题/.test(button.textContent));
+      if (pageButton) pageButton.textContent = `第 ${index + 1} / ${questions.length} 题`;
+      doc.innerHTML = `<h2>${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</h2>
+        <h3>${escapeHtml(raw.knowledge || "待人工关联考点")}</h3>
+        <p><span class="highlight">${escapeHtml(question.stem)}</span></p>
+        <p><b>正确答案：</b>${escapeHtml(question.answer)}</p>
+        <h3>真题解析</h3>
+        <p>${escapeHtml(question.analysis)}</p>
+        <p class="muted">来源：${escapeHtml(question.sourcePage)} · ${escapeHtml(question.sourceStatus)}</p>`;
+      document.body.dataset.previewQuestionIndex = String(index);
+      return true;
+    }
+
+    function selectQuestion(scope, index) {
+      const question = questions[index];
+      const raw = data.questions[index] || {};
+      $$(".page-question-row", scope).forEach((item) => item.classList.toggle("is-selected", Number(item.dataset.index) === index));
+      if (!renderPreviewQuestion(question, raw, index)) {
+        modal(`${question.year} 年 · ${question.type}`, `<p><b>${escapeHtml(question.stem)}</b></p><p><b>关联考点：</b>${escapeHtml(raw.knowledge || "待人工关联")}</p><p><b>答案：</b>${escapeHtml(question.answer)}</p><p>${escapeHtml(question.analysis)}</p>`, "关闭");
+      }
+    }
+
     function bindRows(scope) {
       $$(".page-question-row", scope).forEach((row) => row.addEventListener("click", () => {
         const index = Number(row.dataset.index);
-        const question = questions[index];
-        $$(".page-question-row", scope).forEach((item) => item.classList.remove("is-selected"));
-        row.classList.add("is-selected");
-        modal(`${question.year} 年 · ${question.type}`, `<p><b>${escapeHtml(question.stem)}</b></p><p><b>关联考点：</b>${escapeHtml(data.questions[index]?.knowledge || "待人工关联")}</p><p><b>答案：</b>${escapeHtml(question.answer)}</p><p>${escapeHtml(question.analysis)}</p>`, "关闭");
+        selectQuestion(scope, index);
       }));
     }
 
@@ -183,6 +205,12 @@
         $(".page-question-count", aside).textContent = `${visible} / ${questions.length} 道`;
       });
       bindRows(aside);
+      const previous = $$("button").find((button) => button.textContent.trim() === "上一题");
+      const next = $$("button").find((button) => button.textContent.trim() === "下一题");
+      [previous, next].forEach(markBound);
+      previous.onclick = () => selectQuestion(aside, Math.max(0, Number(document.body.dataset.previewQuestionIndex || 0) - 1));
+      next.onclick = () => selectQuestion(aside, Math.min(questions.length - 1, Number(document.body.dataset.previewQuestionIndex || 0) + 1));
+      selectQuestion(aside, 0);
       return;
     }
 
