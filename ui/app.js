@@ -20,6 +20,73 @@
     return result;
   }
 
+  function getLocalData() {
+    try {
+      return JSON.parse(localStorage.getItem("economy-real-data") || "null");
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeLocalQuestion(item, index) {
+    return {
+      id: item.id || `local-${index}`,
+      year: item.year || "未知",
+      type: item.type || "待识别",
+      stem: item.stem || `来源题干待修复（关联考点：${item.knowledge || "待人工关联"}）`,
+      answer: item.answer || "待确认",
+      analysis: item.analysis || "暂无解析",
+      sourcePage: item.sourcePage || (item.sourceFile ? item.sourceFile.split("/").pop() : "本机真实数据"),
+      sourceStatus: item.sourceStatus || "本机真实数据",
+      reviewStatus: item.reviewStatus || "待初审",
+      options: item.options || [],
+      associations: item.associations || [],
+      reviews: item.reviews || [],
+    };
+  }
+
+  function bindLocalDataImport() {
+    const button = $(".local-data-btn");
+    const input = $(".local-data-input");
+    if (!button || !input) return;
+    const existing = getLocalData();
+    if (existing) button.textContent = `已加载真实数据 ${existing.questions?.length || 0} 题`;
+    button.addEventListener("click", () => input.click());
+    input.addEventListener("change", async () => {
+      const loaded = { questions: [], knowledge: [] };
+      for (const file of input.files) {
+        const records = JSON.parse(await file.text());
+        if (!Array.isArray(records)) continue;
+        if (records[0]?.["考点ID"]) loaded.knowledge = records;
+        else loaded.questions = records;
+      }
+      localStorage.setItem("economy-real-data", JSON.stringify(loaded));
+      button.textContent = `已加载真实数据 ${loaded.questions.length} 题`;
+      toast(`真实数据已在本机浏览器加载：${loaded.questions.length} 题、${loaded.knowledge.length} 个考点`, "success");
+      if ($(".queue")) renderLocalQueue(loaded.questions);
+    });
+  }
+
+  function renderLocalQueue(records) {
+    const queue = $(".queue");
+    if (!queue || !records.length) return;
+    const questions = records.map(normalizeLocalQuestion);
+    const count = $(".panel-head .head-count");
+    if (count) count.textContent = `${questions.length} 道真实题目`;
+    queue.innerHTML = questions.map((question, index) => `
+      <div class="q-item ${index === 0 ? "active" : ""}" data-local-index="${index}">
+        <div class="q-top"><span class="q-num">${question.year} · ${question.type}</span><span class="badge blue">${question.reviewStatus}</span></div>
+        <div class="q-text">${question.stem}</div>
+        <div class="q-foot"><span>答案 ${question.answer}</span><span class="badge amber">${question.sourceStatus}</span></div>
+      </div>`).join("");
+    renderQuestion(questions[0]);
+    $$(".q-item", queue).forEach((item) => item.addEventListener("click", () => {
+      $$(".q-item", queue).forEach((q) => q.classList.remove("active"));
+      item.classList.add("active");
+      renderQuestion(questions[Number(item.dataset.localIndex)]);
+    }));
+  }
+
   function toast(message, type = "") {
     clearTimeout(toastTimer);
     $(".toast")?.remove();
@@ -126,7 +193,10 @@
 
   async function hydrateQuestionQueue() {
     const queue = $(".queue");
-    if (!queue || !apiEnabled) return;
+    if (!queue) return;
+    const local = getLocalData();
+    if (local?.questions?.length) return renderLocalQueue(local.questions);
+    if (!apiEnabled) return;
     try {
       const questions = await api("/api/questions");
       const count = $(".panel-head .head-count");
@@ -297,6 +367,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindReviewWorkspace();
     bindSecondaryPages();
+    bindLocalDataImport();
     hydrateReviewState();
     hydrateQuestionQueue();
     hydrateReleaseState();
