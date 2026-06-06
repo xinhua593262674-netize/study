@@ -2,7 +2,8 @@
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   let toastTimer;
-  const apiEnabled = location.protocol === "http:" || location.protocol === "https:";
+  const apiEnabled = (location.protocol === "http:" || location.protocol === "https:")
+    && !location.hostname.endsWith("github.io");
 
   async function api(path, options = {}) {
     if (!apiEnabled) return null;
