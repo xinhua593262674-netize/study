@@ -142,6 +142,61 @@
     backdrop.onclick = close;
   }
 
+  function hydratePageQuestionData() {
+    const page = $(".page");
+    if (!page || $(".queue")) return;
+    const data = getLocalData();
+    const questions = data?.questions?.map(normalizeLocalQuestion) || [];
+    if (!questions.length) return;
+
+    function bindRows(scope) {
+      $$(".page-question-row", scope).forEach((row) => row.addEventListener("click", () => {
+        const index = Number(row.dataset.index);
+        const question = questions[index];
+        $$(".page-question-row", scope).forEach((item) => item.classList.remove("is-selected"));
+        row.classList.add("is-selected");
+        modal(`${question.year} 年 · ${question.type}`, `<p><b>${escapeHtml(question.stem)}</b></p><p><b>关联考点：</b>${escapeHtml(data.questions[index]?.knowledge || "待人工关联")}</p><p><b>答案：</b>${escapeHtml(question.answer)}</p><p>${escapeHtml(question.analysis)}</p>`, "关闭");
+      }));
+    }
+
+    function renderTable(section, keyword = "") {
+      const matches = questions.map((question, index) => ({ question, index })).filter(({ question, index }) =>
+        !keyword || `${question.stem} ${question.analysis} ${data.questions[index]?.knowledge || ""}`.toLowerCase().includes(keyword)
+      );
+      $(".page-question-count", section).textContent = `${matches.length} / ${questions.length} 道`;
+      $("tbody", section).innerHTML = matches.map(({ question, index }) => `<tr class="page-question-row" data-index="${index}"><td>${index + 1}</td><td>${escapeHtml(question.year)}</td><td>${escapeHtml(question.type)}</td><td>${escapeHtml(question.stem)}</td><td>${escapeHtml(data.questions[index]?.knowledge || "待关联")}</td><td>${escapeHtml(question.answer)}</td><td><span class="badge a">${escapeHtml(question.sourceStatus)}</span></td></tr>`).join("");
+      bindRows(section);
+    }
+
+    if (document.title === "教材预览") {
+      const aside = $(".split-right aside.card");
+      aside.innerHTML = `<div class="card-head">全部真实真题 <span class="push badge b page-question-count">${questions.length} 道</span></div><div class="page-question-search-wrap"><input class="page-question-search" placeholder="搜索题干、解析、考点"></div><div class="preview-question-list">${questions.map((question, index) => `<div class="issue page-question-row" data-index="${index}"><span class="badge g">${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</span><strong>${escapeHtml(data.questions[index]?.knowledge || "待人工关联")}</strong><p>${escapeHtml(question.stem)}</p></div>`).join("")}</div>`;
+      const search = $(".page-question-search", aside);
+      search.addEventListener("input", () => {
+        const keyword = search.value.trim().toLowerCase();
+        let visible = 0;
+        $$(".page-question-row", aside).forEach((row) => {
+          const show = !keyword || row.textContent.toLowerCase().includes(keyword);
+          row.classList.toggle("is-hidden", !show);
+          if (show) visible += 1;
+        });
+        $(".page-question-count", aside).textContent = `${visible} / ${questions.length} 道`;
+      });
+      bindRows(aside);
+      return;
+    }
+
+    let section = $(".page-question-data");
+    if (!section) {
+      section = document.createElement("section");
+      section.className = "card page-question-data";
+      section.innerHTML = `<div class="card-head">全部真实真题数据 <span class="push badge b page-question-count">${questions.length} 道</span></div><div class="page-question-search-wrap"><input class="page-question-search" placeholder="搜索题干、解析、考点"></div><div class="table-wrap page-question-table"><table><thead><tr><th>序号</th><th>年份</th><th>题型</th><th>真题内容</th><th>关联考点</th><th>答案</th><th>来源状态</th></tr></thead><tbody></tbody></table></div>`;
+      page.appendChild(section);
+    }
+    renderTable(section);
+    $(".page-question-search", section).oninput = (event) => renderTable(section, event.target.value.trim().toLowerCase());
+  }
+
   function bindLocalDataImport() {
     const button = $(".local-data-btn");
     const input = $(".local-data-input");
@@ -163,6 +218,7 @@
       toast(`真实数据已在本机浏览器加载：${loaded.questions.length} 题、${loaded.knowledge.length} 个考点`, "success");
       if ($(".queue")) renderLocalQueue(loaded.questions);
       hydrateAllQuestionDrawer();
+      hydratePageQuestionData();
     });
   }
 
@@ -584,6 +640,7 @@
     hydrateReleaseState();
     bindAllQuestionDrawer();
     hydrateAllQuestionDrawer();
+    hydratePageQuestionData();
     bindFallbackButtons();
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();
