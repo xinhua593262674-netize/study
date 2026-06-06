@@ -51,6 +51,36 @@
     })[char]);
   }
 
+  function normalizeEvidenceText(value) {
+    return String(value || "")
+      .replace(/^[\d.]+/, "")
+      .replace(/[、，,。；;：:（）()\s]/g, "")
+      .toLowerCase();
+  }
+
+  function getEvidenceTerms(value) {
+    return String(value || "")
+      .split(/[、，,；;]/)
+      .map(normalizeEvidenceText)
+      .filter((term) => term.length >= 3);
+  }
+
+  function questionMatchesParagraph(question, paragraph) {
+    const normalizedParagraph = normalizeEvidenceText(paragraph);
+    return getEvidenceTerms(question?.knowledge).some((term) => normalizedParagraph.includes(term));
+  }
+
+  function findQuestionEvidence(question, textbookPages) {
+    for (const page of textbookPages) {
+      const paragraphs = String(page.text || "").split(/\n+/).filter(Boolean);
+      const paragraphIndices = paragraphs.map((paragraph, index) => (
+        questionMatchesParagraph(question, paragraph) ? index : -1
+      )).filter((index) => index >= 0);
+      if (paragraphIndices.length) return { page, paragraphs, paragraphIndices };
+    }
+    return null;
+  }
+
   function normalizeLocalQuestion(item, index) {
     return {
       id: item.id || `local-${index}`,
@@ -168,10 +198,29 @@
     if (!page || $(".queue")) return;
     const data = getLocalData();
     const questions = data?.questions?.map(normalizeLocalQuestion) || [];
+    const textbookPages = data?.textbook || [];
     if (!questions.length) return;
 
     function renderPreviewQuestion(question, raw, index) {
-      return false;
+      if (document.title !== "教材预览") return false;
+      const evidence = findQuestionEvidence(raw, textbookPages);
+      const doc = $(".doc");
+      if (!evidence) {
+        doc.innerHTML = `<h2>${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</h2>
+          <h3>${escapeHtml(raw.knowledge || "待人工关联考点")}</h3>
+          <p><span class="highlight">${escapeHtml(question.stem)}</span></p>
+          <p class="muted">未在教材正文中找到精确匹配段落，已标记为待人工定位。</p>`;
+        toast("该真题暂未定位到教材精确段落", "warn");
+        return true;
+      }
+      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${evidence.page.page} 页 · ${escapeHtml(raw.knowledge)}</h3>${evidence.paragraphs.map((text, paragraphIndex) => {
+        return `<p${evidence.paragraphIndices.includes(paragraphIndex) ? ' class="question-evidence-highlight"' : ""}>${escapeHtml(text)}</p>`;
+      }).join("")}`;
+      document.body.dataset.textbookPage = String(evidence.page.page);
+      const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
+      if (pageButton) pageButton.textContent = `P.${evidence.page.page} / ${textbookPages.length}`;
+      toast(`已定位教材第 ${evidence.page.page} 页并高亮考查段落`, "success");
+      return true;
     }
 
     function selectQuestion(scope, index) {
@@ -201,19 +250,39 @@
 
     if (document.title === "教材预览") {
       const aside = $(".split-right aside.card");
-      aside.innerHTML = `<div class="card-head">全部真实真题 <span class="push badge b page-question-count">${questions.length} 道</span></div><div class="page-question-search-wrap"><input class="page-question-search" placeholder="搜索题干、解析、考点"></div><div class="preview-question-list">${questions.map((question, index) => `<div class="issue page-question-row" data-index="${index}"><span class="badge g">${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</span><strong>${escapeHtml(data.questions[index]?.knowledge || "待人工关联")}</strong><p>${escapeHtml(question.stem)}</p></div>`).join("")}</div>`;
-      const search = $(".page-question-search", aside);
-      search.addEventListener("input", () => {
-        const keyword = search.value.trim().toLowerCase();
-        let visible = 0;
-        $$(".page-question-row", aside).forEach((row) => {
-          const show = !keyword || row.textContent.toLowerCase().includes(keyword);
-          row.classList.toggle("is-hidden", !show);
-          if (show) visible += 1;
+      function renderPreviewList(indices, label = "当前教材页关联真题") {
+        aside.innerHTML = `<div class="card-head">${label} <span class="push badge b page-question-count">${indices.length} 道</span></div><div class="page-question-search-wrap"><input class="page-question-search" placeholder="搜索当前页真题、解析、考点"></div><div class="preview-question-list">${indices.length ? indices.map((index) => {
+          const question = questions[index];
+          return `<div class="issue page-question-row" data-index="${index}"><span class="badge g">${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</span><strong>${escapeHtml(data.questions[index]?.knowledge || "待人工关联")}</strong><p>${escapeHtml(question.stem)}</p></div>`;
+        }).join("") : `<div class="drawer-empty"><b>当前教材页暂无关联真题</b><p>切换教材页或继续补充知识关联。</p></div>`}</div>`;
+        const search = $(".page-question-search", aside);
+        search.addEventListener("input", () => {
+          const keyword = search.value.trim().toLowerCase();
+          let visible = 0;
+          $$(".page-question-row", aside).forEach((row) => {
+            const show = !keyword || row.textContent.toLowerCase().includes(keyword);
+            row.classList.toggle("is-hidden", !show);
+            if (show) visible += 1;
+          });
+          $(".page-question-count", aside).textContent = `${visible} / ${indices.length} 道`;
         });
-        $(".page-question-count", aside).textContent = `${visible} / ${questions.length} 道`;
-      });
-      bindRows(aside);
+        bindRows(aside);
+      }
+      renderPreviewList([]);
+      document.body.renderPreviewQuestionList = renderPreviewList;
+      document.body.selectPreviewQuestion = (index) => selectQuestion(aside, index);
+      if (!document.body.dataset.previewLinkBound) {
+        document.body.dataset.previewLinkBound = "true";
+        document.addEventListener("textbook-page:selected", (event) => {
+          document.body.renderPreviewQuestionList(event.detail.questionIndices, `教材第 ${event.detail.page} 页关联真题`);
+        });
+        document.addEventListener("textbook-evidence:selected", (event) => {
+          document.body.selectPreviewQuestion(event.detail.questionIndex);
+        });
+        document.addEventListener("real-question:selected", (event) => {
+          document.body.selectPreviewQuestion(event.detail.index);
+        });
+      }
       return;
     }
 
@@ -260,6 +329,7 @@
   function hydrateTextbookPages() {
     if (!["教材预览", "教材解析验收"].includes(document.title)) return;
     const pages = getLocalData()?.textbook || [];
+    const rawQuestions = getLocalData()?.questions || [];
     const doc = $(".doc");
     if (!pages.length || !doc) return;
     const initial = document.title === "教材解析验收" ? 16 : Number(document.body.dataset.textbookPage || 1);
@@ -268,11 +338,25 @@
       const page = pages[Math.max(0, Math.min(pages.length - 1, pageNumber - 1))];
       document.body.dataset.textbookPage = String(page.page);
       const paragraphs = page.text.split(/\n+/).filter(Boolean);
-      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}`;
+      const pageQuestionIndices = [];
+      const renderedParagraphs = paragraphs.map((text) => {
+        const indices = rawQuestions.map((question, index) => ({ question, index })).filter(({ question }) => {
+          return questionMatchesParagraph(question, text);
+        }).map(({ index }) => index);
+        indices.forEach((index) => {
+          if (!pageQuestionIndices.includes(index)) pageQuestionIndices.push(index);
+        });
+        return `<p${indices.length ? ` class="question-evidence-highlight textbook-evidence" data-question-index="${indices[0]}"` : ""}>${escapeHtml(text)}${indices.length ? `<span class="evidence-question-count">关联 ${indices.length} 道真题</span>` : ""}</p>`;
+      }).join("");
+      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${renderedParagraphs}`;
       const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
       if (pageButton) pageButton.textContent = `P.${page.page} / ${pages.length}`;
       const pageLabel = $$(".card-head .push").find((item) => /P\.\d+\s*\/\s*\d+/.test(item.textContent));
       if (pageLabel) pageLabel.textContent = `P.${page.page} / ${pages.length}　−　100%　＋`;
+      $$(".textbook-evidence", doc).forEach((paragraph) => paragraph.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("textbook-evidence:selected", { detail: { questionIndex: Number(paragraph.dataset.questionIndex) } }));
+      }));
+      document.dispatchEvent(new CustomEvent("textbook-page:selected", { detail: { page: page.page, questionIndices: pageQuestionIndices } }));
     }
 
     const previous = $$("button").find((button) => button.textContent.trim() === "上一页");
