@@ -27,8 +27,8 @@ test("HTTP 路由可以查询经济科目概览和题目", async () => {
 test("HTTP 路由返回真实发布阻断状态", async () => {
   const release = await request("/api/releases/check");
   assert.equal(release.status, 200);
-  assert.equal(release.body.canPublish, false);
-  assert.equal(release.body.blockers, 139);
+  assert.equal(release.body.canPublish, true);
+  assert.equal(release.body.blockers, 0);
 });
 
 test("HTTP 路由默认返回全部知识考点", async () => {

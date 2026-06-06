@@ -31,6 +31,7 @@
 5. [教研大宽表](ui/knowledge-table.html)：按最新版叶子知识节点查看教材与真题关联。
 6. [教材预览](ui/textbook-preview.html)：阅读教材并查看正式发布的考查标注。
 7. [知识图谱分析](ui/knowledge-graph.html)：分析跨章节关系与知识组合考查。
+8. 本机原始资料库：运行 `npm run generate:sources` 后打开 `ui/source-documents.html`，完整展示教材与历年真题并保留图片、表格、公式和答案解析；原始资料不上传公开仓库。
 
 ## 下一步输入
 
@@ -60,6 +61,7 @@ npm run import:knowledge
 npm run import:questions
 npm run import:textbook
 npm run import:associations
+npm run generate:sources
 ```
 
 核心接口：

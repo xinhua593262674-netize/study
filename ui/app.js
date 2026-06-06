@@ -291,7 +291,7 @@
     if (!button || !input) return;
     markBound(button);
     const existing = getLocalData();
-    const legacy = existing?.questions?.length && existing.questions.every((item) => item.stem?.includes("来源题干待修复"));
+    const legacy = existing?.questions?.length && existing.version !== "markdown-complete-v1";
     if (legacy) {
       button.textContent = "数据版本过旧，请重新加载";
       button.classList.add("warn");
@@ -302,7 +302,7 @@
     button.addEventListener("click", () => input.click());
     input.addEventListener("change", async () => {
       const existingData = getLocalData() || {};
-      const loaded = { questions: existingData.questions || [], knowledge: existingData.knowledge || [], textbook: existingData.textbook || [] };
+      const loaded = { version: "markdown-complete-v1", questions: existingData.questions || [], knowledge: existingData.knowledge || [], textbook: existingData.textbook || [] };
       for (const file of input.files) {
         const records = JSON.parse(await file.text());
         if (!Array.isArray(records)) continue;

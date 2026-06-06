@@ -44,24 +44,10 @@ test("完整真题审核动作会持久化并进入待发布", () => {
   assert.equal(question.reviews[0].reviewer, "测试教研");
 });
 
-test("部分数字缺失真题必须进入复审", () => {
-  const { db, service } = setup();
-  const question = db.prepare("SELECT id FROM questions WHERE source_status = '部分数字缺失' LIMIT 1").get();
-  const result = service.saveReview(question.id, {
-    action: "提交复审",
-    confidence: 96,
-    hasMajorAiChanges: false,
-    noDirectEvidence: false,
-    reviewer: "测试教研",
-  });
-  assert.equal(result.targetStatus, "待复审");
-  assert.deepEqual(result.risks, ["部分数字缺失"]);
-});
-
-test("部分数字缺失会阻断发布", () => {
+test("完整 Markdown 真题允许创建发布批次", () => {
   const { service } = setup();
   const check = service.releaseCheck();
-  assert.equal(check.canPublish, false);
-  assert.equal(check.blockers, 139);
-  assert.equal(service.createRelease().created, false);
+  assert.equal(check.canPublish, true);
+  assert.equal(check.blockers, 0);
+  assert.equal(service.createRelease().created, true);
 });

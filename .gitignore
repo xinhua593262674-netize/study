@@ -2,6 +2,8 @@ node_modules
 .vercel
 data/*
 !data/.gitkeep
+ui/source-content/
+ui/source-documents.html
 __pycache__
 *.pyc
 .DS_Store

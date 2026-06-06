@@ -6,8 +6,9 @@
     "serve": "node server/app.js",
     "start": "node server/app.js",
     "import:knowledge": "node scripts/import-knowledge.mjs",
-    "import:questions": "python3 scripts/import-questions.py",
+    "import:questions": "python3 scripts/import-questions-markdown.py",
     "import:textbook": "python3 scripts/import-textbook.py",
+    "generate:sources": "python3 scripts/generate-source-library.py",
     "import:associations": "node scripts/import-associations.js"
   }
 }
