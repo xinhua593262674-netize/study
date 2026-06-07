@@ -6,6 +6,7 @@
   const questionEvidencesCache = new WeakMap();
   const questionEvidenceTermsCache = new WeakMap();
   const normalizedEvidenceTextCache = new Map();
+  const textbookSectionCache = new WeakMap();
   const apiEnabled = (location.protocol === "http:" || location.protocol === "https:")
     && !location.hostname.endsWith("github.io");
 
@@ -124,6 +125,84 @@
     return groupTextbookParagraphs(page?.text);
   }
 
+  function isTextbookEvidenceParagraph(value) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (text.length < 10) return false;
+    if (/^第\d+篇.{1,24}$/.test(text)) return false;
+    if (/^第\d+章.{1,32}\s+\d+$/.test(text)) return false;
+    if (/^[（(]?\d+(?:\.\d+)+(?:-\d+)?[）)]?$/.test(text)) return false;
+    if (/^(?:续表|编制人[:：].*审核人[:：])/.test(text)) return false;
+    return true;
+  }
+
+  function getTextbookSections(textbookPages) {
+    if (textbookSectionCache.has(textbookPages)) return textbookSectionCache.get(textbookPages);
+    const entries = [];
+    textbookPages.forEach((page) => {
+      let paragraphIndex = 0;
+      (page.blocks || []).forEach((block) => {
+        if (!["heading", "paragraph"].includes(block.type) || !block.text) return;
+        entries.push({
+          page,
+          paragraphIndex,
+          text: block.text,
+          type: block.type,
+          level: block.type === "heading" ? Number(block.level || 3) : null,
+        });
+        paragraphIndex += 1;
+      });
+    });
+    const sections = entries.filter((entry) => entry.type === "heading").map((heading) => {
+      const start = entries.indexOf(heading);
+      let end = entries.length;
+      for (let index = start + 1; index < entries.length; index += 1) {
+        if (entries[index].type === "heading" && entries[index].level <= heading.level) {
+          end = index;
+          break;
+        }
+      }
+      return {
+        heading,
+        sectionCode: (heading.text.match(/^(\d+(?:\.\d+)+)/)?.[1] || "").replace(/(?:\.0)+$/, ""),
+        normalizedTitle: normalizeEvidenceText(heading.text),
+        paragraphs: entries.slice(start + 1, end).filter((entry) =>
+          entry.type === "paragraph" && isTextbookEvidenceParagraph(entry.text)
+        ),
+      };
+    });
+    textbookSectionCache.set(textbookPages, sections);
+    return sections;
+  }
+
+  function getQuestionSectionEvidence(question, textbookPages) {
+    const knowledgeItems = String(question?.knowledge || "").split(/[、，,；;]/).map((item) => ({
+      sectionCode: (item.trim().match(/^(\d+(?:\.\d+)+)/)?.[1] || "").replace(/(?:\.0)+$/, ""),
+      normalizedTitle: normalizeEvidenceText(item),
+    })).filter((item) => item.sectionCode || item.normalizedTitle.length >= 5);
+    if (!knowledgeItems.length) return [];
+    const matches = getTextbookSections(textbookPages).filter((section) =>
+      knowledgeItems.some((knowledge) =>
+        (section.sectionCode && knowledge.sectionCode === section.sectionCode)
+        || (section.normalizedTitle.length >= 5 && knowledge.normalizedTitle === section.normalizedTitle)
+      )
+      && section.paragraphs.length > 0
+      && section.paragraphs.length <= 20
+    ).sort((a, b) => b.normalizedTitle.length - a.normalizedTitle.length);
+    if (!matches.length) return [];
+    const section = matches[0];
+    return section.paragraphs.map((entry) => ({
+      ...entry,
+      paragraphs: getTextbookParagraphs(entry.page),
+      score: 500,
+      analysisMatches: [],
+      correctMatches: [],
+      knowledgeMatches: [section.normalizedTitle],
+      confidence: 92,
+      confidenceLabel: "高置信度",
+      sectionTitle: section.heading.text,
+    }));
+  }
+
   function renderInlineMath(value) {
     return escapeHtml(value).replace(/\$([^$]+)\$/g, '<span class="textbook-inline-formula">\\($1\\)</span>');
   }
@@ -185,7 +264,7 @@
       terms = {
         analysis: getAnalysisEvidenceTerms(question?.analysis),
         correct: (question?.options || []).filter((option) => option.isCorrect)
-          .map((option) => normalizeEvidenceText(option.content)).filter((term) => term.length >= 5),
+          .map((option) => normalizeEvidenceText(option.content)).filter((term) => term.length >= 8),
         knowledge: getEvidenceTerms(question?.knowledge),
       };
       questionEvidenceTermsCache.set(question, terms);
@@ -209,9 +288,15 @@
   function findQuestionEvidences(question, textbookPages) {
     if (question && questionEvidencesCache.has(question)) return questionEvidencesCache.get(question);
     const candidates = new Map();
+    const sectionEvidence = getQuestionSectionEvidence(question, textbookPages);
+    let bestKnowledgeOnly = null;
+    sectionEvidence.forEach((evidence) => {
+      candidates.set(`${evidence.page.page}:${evidence.paragraphIndex}`, evidence);
+    });
     for (const page of textbookPages) {
       const paragraphs = getTextbookParagraphs(page);
       paragraphs.forEach((paragraph, paragraphIndex) => {
+        if (!isTextbookEvidenceParagraph(paragraph)) return;
         const match = scoreQuestionEvidence(question, paragraph);
         if (!match.score) return;
         let targetIndex = paragraphIndex;
@@ -226,10 +311,18 @@
         }
         const key = `${page.page}:${targetIndex}`;
         const candidate = { page, paragraphs, paragraphIndex: targetIndex, ...match };
+        if (!match.analysisMatches.length && !match.correctMatches.length) {
+          if (!bestKnowledgeOnly || bestKnowledgeOnly.score < candidate.score) bestKnowledgeOnly = candidate;
+          return;
+        }
         if (!candidates.has(key) || candidates.get(key).score < candidate.score) candidates.set(key, candidate);
       });
     }
+    if (!sectionEvidence.length && bestKnowledgeOnly) {
+      candidates.set(`${bestKnowledgeOnly.page.page}:${bestKnowledgeOnly.paragraphIndex}`, bestKnowledgeOnly);
+    }
     const evidences = [...candidates.values()].map((candidate) => {
+      if (candidate.confidence) return candidate;
       const confidence = candidate.analysisMatches.length ? 92 : candidate.correctMatches.length ? 72 : 45;
       return {
         ...candidate,
