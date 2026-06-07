@@ -3,6 +3,7 @@
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   let toastTimer;
   const questionEvidenceCache = new WeakMap();
+  const questionEvidencesCache = new WeakMap();
   const questionEvidenceTermsCache = new WeakMap();
   const normalizedEvidenceTextCache = new Map();
   const apiEnabled = (location.protocol === "http:" || location.protocol === "https:")
@@ -149,7 +150,8 @@
       return groupTextbookParagraphs(page?.text).map((text, paragraphIndex) => {
         const matches = matchesByParagraph.get(paragraphIndex) || [];
         const lowConfidence = matches.some(({ evidence }) => evidence.confidence < 65);
-        return `<p${matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${matches[0].index}"` : ""}>${renderInlineMath(text)}${matches.length ? `<span class="evidence-question-count">关联 ${matches.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : ""}</p>`;
+        const indices = matches.map(({ index }) => index);
+        return `<p${matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${indices[0]}" data-question-indices=",${indices.join(",")},"` : ""}>${renderInlineMath(text)}${matches.length ? `<span class="evidence-question-count">关联 ${matches.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : ""}</p>`;
       }).join("");
     }
     let paragraphIndex = 0;
@@ -157,7 +159,8 @@
       if (!["heading", "paragraph"].includes(block.type)) return renderTextbookMediaBlock(block);
       const matches = matchesByParagraph.get(paragraphIndex) || [];
       const lowConfidence = matches.some(({ evidence }) => evidence.confidence < 65);
-      const attributes = matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${matches[0].index}"` : "";
+      const indices = matches.map(({ index }) => index);
+      const attributes = matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${indices[0]}" data-question-indices=",${indices.join(",")},"` : "";
       const count = matches.length ? `<span class="evidence-question-count">关联 ${matches.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : "";
       paragraphIndex += 1;
       if (block.type === "heading") {
@@ -168,8 +171,11 @@
     }).join("");
   }
 
-  function typesetTextbookMath() {
-    if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([$(".doc")]).catch(() => {});
+  function typesetTextbookMath(scope = $(".doc")) {
+    if (!scope || scope.dataset.mathTypeset === "true" || !window.MathJax?.typesetPromise) return;
+    window.MathJax.typesetPromise([scope]).then(() => {
+      scope.dataset.mathTypeset = "true";
+    }).catch(() => {});
   }
 
   function scoreQuestionEvidence(question, paragraph) {
@@ -194,39 +200,45 @@
   }
 
   function findQuestionEvidence(question, textbookPages) {
-    if (question && questionEvidenceCache.has(question)) return questionEvidenceCache.get(question);
-    let best = null;
+    const evidences = findQuestionEvidences(question, textbookPages);
+    const best = evidences[0] || null;
+    if (question) questionEvidenceCache.set(question, best);
+    return best;
+  }
+
+  function findQuestionEvidences(question, textbookPages) {
+    if (question && questionEvidencesCache.has(question)) return questionEvidencesCache.get(question);
+    const candidates = new Map();
     for (const page of textbookPages) {
       const paragraphs = getTextbookParagraphs(page);
       paragraphs.forEach((paragraph, paragraphIndex) => {
         const match = scoreQuestionEvidence(question, paragraph);
-        if (!match.score || (best && match.score <= best.score)) return;
-        best = { page, paragraphs, paragraphIndex, ...match };
+        if (!match.score) return;
+        let targetIndex = paragraphIndex;
+        if (isTextbookHeading(paragraph)) {
+          for (let index = paragraphIndex + 1; index < paragraphs.length; index += 1) {
+            if (isTextbookHeading(paragraphs[index])) break;
+            if (paragraphs[index].length >= 12) {
+              targetIndex = index;
+              break;
+            }
+          }
+        }
+        const key = `${page.page}:${targetIndex}`;
+        const candidate = { page, paragraphs, paragraphIndex: targetIndex, ...match };
+        if (!candidates.has(key) || candidates.get(key).score < candidate.score) candidates.set(key, candidate);
       });
     }
-    if (!best) {
-      if (question) questionEvidenceCache.set(question, null);
-      return null;
-    }
-    if (isTextbookHeading(best.paragraphs[best.paragraphIndex])) {
-      let bodyParagraphIndex = -1;
-      for (let index = best.paragraphIndex + 1; index < best.paragraphs.length; index += 1) {
-        if (isTextbookHeading(best.paragraphs[index])) break;
-        if (best.paragraphs[index].length >= 12) {
-          bodyParagraphIndex = index;
-          break;
-        }
-      }
-      if (bodyParagraphIndex >= 0) best.paragraphIndex = bodyParagraphIndex;
-    }
-    const confidence = best.analysisMatches.length ? 92 : best.correctMatches.length ? 72 : 45;
-    const evidence = {
-      ...best,
-      confidence,
-      confidenceLabel: confidence >= 85 ? "高置信度" : confidence >= 65 ? "中置信度" : "低置信度·待抽检",
-    };
-    if (question) questionEvidenceCache.set(question, evidence);
-    return evidence;
+    const evidences = [...candidates.values()].map((candidate) => {
+      const confidence = candidate.analysisMatches.length ? 92 : candidate.correctMatches.length ? 72 : 45;
+      return {
+        ...candidate,
+        confidence,
+        confidenceLabel: confidence >= 85 ? "高置信度" : confidence >= 65 ? "中置信度" : "低置信度·待抽检",
+      };
+    }).sort((a, b) => b.score - a.score);
+    if (question) questionEvidencesCache.set(question, evidences);
+    return evidences;
   }
 
   function renderQuestionOptions(question, compact = false) {
@@ -362,21 +374,16 @@
       const evidence = findQuestionEvidence(raw, textbookPages);
       const doc = $(".doc");
       if (!evidence) {
-        doc.innerHTML = `<h2>${escapeHtml(question.year)} 年 · ${escapeHtml(question.type)}</h2>
-          <h3>${escapeHtml(raw.knowledge || "待人工关联考点")}</h3>
-          <p><span class="highlight">${escapeHtml(question.stem)}</span></p>
-          ${renderQuestionOptions(question)}
-          <p class="muted">当前未找到可靠教材原文，系统版本仍正常展示，可后续抽检纠偏。</p>`;
-        toast("当前未找到可靠教材原文，已保留系统版本", "warn");
+        toast("当前真题尚未找到教材关联段落，已保留连续教材视图", "warn");
         return true;
       }
-      const matches = new Map([[evidence.paragraphIndex, [{ index, evidence }]]]);
-      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${evidence.page.page} 页 · ${escapeHtml(raw.knowledge)} <span class="evidence-confidence ${evidence.confidence < 65 ? "low" : ""}">${evidence.confidenceLabel} ${evidence.confidence}%</span></h3>${renderTextbookPage(evidence.page, matches)}`;
-      document.body.dataset.textbookPage = String(evidence.page.page);
-      const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
-      if (pageButton) pageButton.textContent = `P.${evidence.page.page} / ${textbookPages.length}`;
-      typesetTextbookMath();
-      toast(`已定位教材第 ${evidence.page.page} 页并高亮考查段落`, "success");
+      const target = $(`[data-question-indices*=",${index},"]`, doc);
+      if (target) {
+        $$(".textbook-evidence.is-current-evidence", doc).forEach((item) => item.classList.remove("is-current-evidence"));
+        target.classList.add("is-current-evidence");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      toast(`已定位教材第 ${evidence.page.page} 页的关联段落`, "success");
       return true;
     }
 
@@ -428,6 +435,12 @@
       }
       renderPreviewList([]);
       document.body.renderPreviewQuestionList = renderPreviewList;
+      document.body.focusPreviewQuestion = (index) => {
+        const row = $(`.page-question-row[data-index="${index}"]`, aside);
+        if (!row) return;
+        $$(".page-question-row", aside).forEach((item) => item.classList.toggle("is-selected", item === row));
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      };
       document.body.selectPreviewQuestion = (index) => selectQuestion(aside, index);
       if (!document.body.dataset.previewLinkBound) {
         document.body.dataset.previewLinkBound = "true";
@@ -435,7 +448,13 @@
           document.body.renderPreviewQuestionList(event.detail.questionIndices, `教材第 ${event.detail.page} 页关联真题`);
         });
         document.addEventListener("textbook-evidence:selected", (event) => {
-          document.body.selectPreviewQuestion(event.detail.questionIndex);
+          const indices = event.detail.questionIndices || [event.detail.questionIndex];
+          document.body.renderPreviewQuestionList(indices, "当前教材段落关联真题");
+          document.body.focusPreviewQuestion(indices[0]);
+        });
+        document.addEventListener("textbook-evidence:visible", (event) => {
+          document.body.renderPreviewQuestionList(event.detail.questionIndices, `当前教材段落关联真题`);
+          document.body.focusPreviewQuestion(event.detail.questionIndices[0]);
         });
         document.addEventListener("real-question:selected", (event) => {
           document.body.selectPreviewQuestion(event.detail.index);
@@ -494,43 +513,60 @@
     const rawQuestions = getLocalData()?.questions || [];
     const doc = $(".doc");
     if (!pages.length || !doc) return;
-    const initial = document.title === "教材解析验收" ? 16 : Number(document.body.dataset.textbookPage || 1);
-
-    function renderPage(pageNumber) {
-      const page = pages[Math.max(0, Math.min(pages.length - 1, pageNumber - 1))];
-      document.body.dataset.textbookPage = String(page.page);
-      const pageQuestionIndices = [];
-      const matchesByParagraph = new Map();
-      getTextbookParagraphs(page).forEach((text, paragraphIndex) => {
-        const matches = rawQuestions.map((question, index) => ({
-          index,
-          evidence: findQuestionEvidence(question, pages),
-        })).filter(({ evidence }) => evidence?.page.page === page.page && evidence.paragraphIndex === paragraphIndex);
-        matches.forEach(({ index }) => {
-          if (!pageQuestionIndices.includes(index)) pageQuestionIndices.push(index);
-        });
-        if (matches.length) matchesByParagraph.set(paragraphIndex, matches);
+    const matchesByPage = new Map(pages.map((page) => [page.page, new Map()]));
+    rawQuestions.forEach((question, index) => {
+      findQuestionEvidences(question, pages).forEach((evidence) => {
+        const pageMatches = matchesByPage.get(evidence.page.page);
+        const paragraphMatches = pageMatches.get(evidence.paragraphIndex) || [];
+        paragraphMatches.push({ index, evidence });
+        pageMatches.set(evidence.paragraphIndex, paragraphMatches);
       });
-      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${renderTextbookPage(page, matchesByParagraph)}`;
-      const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
-      if (pageButton) pageButton.textContent = `P.${page.page} / ${pages.length}`;
-      const pageLabel = $$(".card-head .push").find((item) => /P\.\d+\s*\/\s*\d+/.test(item.textContent));
-      if (pageLabel) pageLabel.textContent = `P.${page.page} / ${pages.length}　−　100%　＋`;
-      $$(".textbook-evidence", doc).forEach((paragraph) => paragraph.addEventListener("click", () => {
-        document.dispatchEvent(new CustomEvent("textbook-evidence:selected", { detail: { questionIndex: Number(paragraph.dataset.questionIndex) } }));
-      }));
-      typesetTextbookMath();
-      document.dispatchEvent(new CustomEvent("textbook-page:selected", { detail: { page: page.page, questionIndices: pageQuestionIndices } }));
-    }
-
-    const previous = $$("button").find((button) => button.textContent.trim() === "上一页");
-    const next = $$("button").find((button) => button.textContent.trim() === "下一页");
-    if (previous && next) {
-      [previous, next].forEach(markBound);
-      previous.onclick = () => renderPage(Number(document.body.dataset.textbookPage || 1) - 1);
-      next.onclick = () => renderPage(Number(document.body.dataset.textbookPage || 1) + 1);
-    }
-    renderPage(initial);
+    });
+    doc.classList.add("textbook-continuous");
+    doc.innerHTML = pages.map((page) => `<section class="textbook-page-section" data-page="${page.page}">
+      <div class="textbook-page-label">教材第 ${page.page} 页</div>
+      ${renderTextbookPage(page, matchesByPage.get(page.page))}
+    </section>`).join("");
+    const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
+    const pageLabel = $$(".card-head .push").find((item) => /P\.\d+\s*\/\s*\d+/.test(item.textContent));
+    const getVisibleEvidenceIndices = () => {
+      const visible = $$(".textbook-evidence", doc).find((item) => {
+        const bounds = item.getBoundingClientRect();
+        return bounds.top >= window.innerHeight * 0.2 && bounds.top <= window.innerHeight * 0.7;
+      });
+      return visible?.dataset.questionIndices.split(",").filter(Boolean).map(Number) || [];
+    };
+    const setCurrentPage = (pageNumber) => {
+      document.body.dataset.textbookPage = String(pageNumber);
+      if (pageButton) pageButton.textContent = `当前 P.${pageNumber} / ${pages.length}`;
+      if (pageLabel) pageLabel.textContent = `当前 P.${pageNumber} / ${pages.length}　连续阅读`;
+      const indices = [...new Set([...matchesByPage.get(pageNumber).values()].flat().map(({ index }) => index))];
+      typesetTextbookMath($(`.textbook-page-section[data-page="${pageNumber}"]`, doc));
+      document.dispatchEvent(new CustomEvent("textbook-page:selected", { detail: { page: pageNumber, questionIndices: indices } }));
+      const visibleEvidenceIndices = getVisibleEvidenceIndices();
+      if (visibleEvidenceIndices.length) {
+        document.dispatchEvent(new CustomEvent("textbook-evidence:visible", { detail: { questionIndices: visibleEvidenceIndices } }));
+      }
+    };
+    $$(".textbook-evidence", doc).forEach((paragraph) => paragraph.addEventListener("click", () => {
+      const indices = paragraph.dataset.questionIndices.split(",").filter(Boolean).map(Number);
+      document.dispatchEvent(new CustomEvent("textbook-evidence:selected", { detail: { questionIndex: indices[0], questionIndices: indices } }));
+    }));
+    const pageObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visible) setCurrentPage(Number(visible.target.dataset.page));
+    }, { rootMargin: "-15% 0px -70% 0px", threshold: [0, 0.1, 0.3] });
+    $$(".textbook-page-section", doc).forEach((section) => pageObserver.observe(section));
+    const evidenceObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      const questionIndices = visible.target.dataset.questionIndices.split(",").filter(Boolean).map(Number);
+      document.dispatchEvent(new CustomEvent("textbook-evidence:visible", { detail: { questionIndices } }));
+    }, { rootMargin: "-25% 0px -55% 0px", threshold: [0, 0.25, 0.6] });
+    $$(".textbook-evidence", doc).forEach((paragraph) => evidenceObserver.observe(paragraph));
+    const initial = document.title === "教材解析验收" ? 16 : Number(document.body.dataset.textbookPage || 1);
+    $(`.textbook-page-section[data-page="${initial}"]`, doc)?.scrollIntoView({ block: "start" });
+    setCurrentPage(initial);
   }
 
   function bindLocalDataImport() {
@@ -1011,7 +1047,9 @@
     hydrateReleasePage();
     hydrateTextbookPages();
     bindFallbackButtons();
-    window.addEventListener("load", typesetTextbookMath);
+    window.addEventListener("load", () => {
+      typesetTextbookMath($(`.textbook-page-section[data-page="${document.body.dataset.textbookPage || 1}"]`) || $(".doc"));
+    });
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();
       if (event.altKey && event.key === "Enter") $(".footer .btn.primary")?.click();
