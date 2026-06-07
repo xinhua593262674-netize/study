@@ -48,7 +48,7 @@ function migrate(db) {
       analysis TEXT NOT NULL,
       source_page TEXT NOT NULL,
       source_status TEXT NOT NULL,
-      review_status TEXT NOT NULL DEFAULT '待初审'
+      review_status TEXT NOT NULL DEFAULT '系统已展示'
     );
     CREATE TABLE IF NOT EXISTS options (
       id TEXT PRIMARY KEY,
@@ -89,6 +89,8 @@ function migrate(db) {
       name TEXT PRIMARY KEY,
       completed_at TEXT NOT NULL
     );
+    UPDATE questions SET review_status = '系统已展示'
+    WHERE review_status IN ('待初审', '待复审', '待发布');
   `);
 }
 
@@ -145,7 +147,7 @@ function seed(db) {
   const questions = fs.existsSync(questionFile)
     ? JSON.parse(fs.readFileSync(questionFile, "utf8")).map((item) => [
         item.id, item.year, item.type, item.stem, item.answer, item.analysis,
-        path.basename(item.sourceFile), item.sourceStatus, item.reviewStatus,
+        path.basename(item.sourceFile), item.sourceStatus, "系统已展示",
       ])
     : fallbackQuestions;
   for (const row of questions) insertQuestion.run(...row);

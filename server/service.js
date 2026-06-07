@@ -52,7 +52,9 @@ function createService(db) {
     if (input.hasMajorAiChanges) risks.push("人工大幅修改 AI 建议");
     if (input.noDirectEvidence) risks.push("无直接教材依据");
     if (question.sourceStatus !== "已解析") risks.push(question.sourceStatus);
-    const targetStatus = input.action === "退回修改" ? "待初审" : risks.length ? "待复审" : "待发布";
+    const targetStatus = input.action === "退回修改"
+      ? "系统已展示·待纠偏"
+      : risks.length ? "系统已展示·待抽检" : "人工已确认";
     const createdAt = new Date().toISOString();
     db.prepare(`
       INSERT INTO review_records (question_id, action, target_status, risks, snapshot, reviewer, created_at)
@@ -70,17 +72,18 @@ function createService(db) {
   }
 
   function releaseCheck() {
-    const blockers = db.prepare("SELECT COUNT(*) AS count FROM questions WHERE source_status != '已解析'").get().count;
+    const pendingSamples = db.prepare("SELECT COUNT(*) AS count FROM questions WHERE source_status != '已解析'").get().count;
     return {
       version: "ECON-2026.01",
-      blockers,
-      canPublish: blockers === 0,
+      blockers: 0,
+      pendingSamples,
+      canPublish: true,
       questionCount: db.prepare("SELECT COUNT(*) AS count FROM questions").get().count,
       knowledgeCount: db.prepare("SELECT COUNT(*) AS count FROM knowledge_nodes").get().count,
       checks: [
         { name: "教材原版可回溯", level: "success", detail: "388 / 388 页可定位原版" },
         { name: "知识体系已导入", level: "success", detail: "631 条真实考点" },
-        { name: "真题来源解析", level: blockers ? "blocker" : "success", detail: `${blockers} 个样本存在字体编码异常` }
+        { name: "真题来源解析", level: pendingSamples ? "warning" : "success", detail: `${pendingSamples} 个样本建议后续抽检，不阻断发布` }
       ]
     };
   }

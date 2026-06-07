@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>教研解析平台 - 按真题审核工作台</title>
+  <title>教研解析平台 - 真题工作台</title>
   <link rel="stylesheet" href="app.css" />
   <style>
     * { box-sizing: border-box; }
@@ -121,8 +121,8 @@
     <aside class="sidebar">
       <div class="brand"><div class="logo"><svg viewBox="0 0 24 24"><path d="M5 3h10a4 4 0 0 1 4 4v14H8a3 3 0 0 1-3-3V3Zm3 3v10.2c.6-.2 1.2-.2 2-.2h6V7a1 1 0 0 0-1-1H8Z"/></svg></div>教研解析平台</div>
       <div class="nav-label">核心工作</div>
-      <a class="nav-item active" href="index.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>按真题审核<span class="nav-count">38</span></a>
-      <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m15 9-6 6m0-6 6 6"/></svg>复审队列<span class="nav-count">7</span></div>
+      <a class="nav-item active" href="index.html"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>真题工作台<span class="nav-count">397</span></a>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m15 9-6 6m0-6 6 6"/></svg>待抽检<span class="nav-count">低置信度</span></div>
       <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>按知识点审核</div>
       <div class="nav-label">数据准备</div>
       <a class="nav-item" href="textbook-validation.html"><svg viewBox="0 0 24 24"><path d="M4 4h7v16H4zM13 4h7v16h-7z"/></svg>教材解析验收</a>
@@ -136,12 +136,12 @@
     </aside>
     <main>
       <header class="topbar">
-        <div><div class="title">按真题审核</div><div class="crumb">审核工作台 / 客观题初审</div></div>
+        <div><div class="title">真题工作台</div><div class="crumb">系统最佳版本已展示 / 人工纠偏可选</div></div>
         <div class="top-meta"><button class="btn local-data-btn">加载本机真实数据</button><input class="local-data-input" type="file" accept=".json" multiple hidden><div class="select">一级建造师 · 建设工程经济⌄</div><div class="select">2026 版教材⌄</div><div class="top-tag">真实数据处理中</div><div class="avatar">林</div></div>
       </header>
       <section class="summary">
         <div><div class="progress-title">经济科目真实数据接入 5 / 5 年</div><div class="bar"><span style="width:100%"></span></div></div>
-        <div class="legend"><span><i class="dot"></i>当前审核</span><span><i class="dot" style="background:#15966a"></i>已通过</span><span><i class="dot" style="background:#d88724"></i>待复审</span></div>
+        <div class="legend"><span><i class="dot"></i>系统版本</span><span><i class="dot" style="background:#15966a"></i>人工已确认</span><span><i class="dot" style="background:#d88724"></i>待抽检</span></div>
         <div class="stats"><div class="stat"><b>397</b> 真题记录</div><div class="stat"><b>631</b> 知识考点</div><div class="stat warn"><b>5</b> 来源解析异常</div></div>
       </section>
       <section class="workspace">
@@ -151,8 +151,8 @@
             <div class="q-item active"><div class="q-top"><span class="q-num">2025 · 单选题</span><span class="badge gray">真实题目</span></div><div class="q-text">下列方案经济效果评价内容中，属于财务评价的是...</div><div class="q-foot"><span>4 个审核单元</span><span class="badge green">答案 C</span></div></div>
             <div class="q-item"><div class="q-top"><span class="q-num">2025 · 单选题</span><span class="badge gray">真实题目</span></div><div class="q-text">关于设备寿命的说法，正确的是...</div><div class="q-foot"><span>4 个审核单元</span><span class="badge green">答案 B</span></div></div>
             <div class="q-item"><div class="q-top"><span class="q-num">2025 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">绘制现金流量图必需的要素有...</div><div class="q-foot"><span>5 个审核单元</span><span class="badge green">答案 BCD</span></div></div>
-            <div class="q-item"><div class="q-top"><span class="q-num">2024 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">采用成本分析法确定最佳现金持有量时，应考虑的成本有...</div><div class="q-foot"><span>5 个审核单元</span><span>待初审</span></div></div>
-            <div class="q-item"><div class="q-top"><span class="q-num">2023 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">现金管理可以采用的方法有...</div><div class="q-foot"><span>5 个审核单元</span><span>待初审</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2024 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">采用成本分析法确定最佳现金持有量时，应考虑的成本有...</div><div class="q-foot"><span>5 个分析单元</span><span>系统已展示</span></div></div>
+            <div class="q-item"><div class="q-top"><span class="q-num">2023 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">现金管理可以采用的方法有...</div><div class="q-foot"><span>5 个分析单元</span><span>系统已展示</span></div></div>
             <div class="q-item"><div class="q-top"><span class="q-num">2021 · 多选题</span><span class="badge blue">真实题目</span></div><div class="q-text">下列会计要素中，属于静态会计要素的有...</div><div class="q-foot"><span>5 个审核单元</span><span class="badge amber">来源解析异常</span></div></div>
           </div>
         </aside>
@@ -182,13 +182,13 @@
             <div class="evidence"><div class="evidence-head"><span class="ev-num">2</span>相关教材内容 <span class="page-link">教材 P.16 ↗</span></div><div class="quote">财务评价是在国家现行财税制度和价格体系下，从拟建项目的角度出发，分析项目的盈利能力和偿债能力，评价项目在财务上的可行性。</div></div>
           </div>
           <div class="section">
-            <div class="section-title">人工审核结果</div>
+            <div class="section-title">人工纠偏（可选）</div>
             <div class="suggest-card" style="border-left-color:#15966a"><div class="suggest-top"><span class="badge green">答案一致</span><span class="suggest-title">真题解析与 2026 教材一致</span></div><div class="reason">正确选项：<mark>偿债能力分析</mark><br>来源：2025 年一级建造师《建设工程经济》真题答案及解析。</div><div class="card-actions"><button class="mini-btn">编辑解析</button><button class="mini-btn">查看来源</button></div></div>
           </div>
           <div class="alert"><span>⚠</span><div><b>来源文件存在字体编码缺失</b>题号及部分数字无法可靠抽取；题干语义、答案、解析与关联考点可正常审核。</div></div>
         </aside>
       </section>
-      <footer class="footer"><div class="autosave">已自动暂存 · 14:32:18</div><div class="footer-actions"><button class="btn">上一题</button><button class="btn">暂存并下一题</button><button class="btn warn">退回修改</button><button class="btn primary">提交复审</button></div></footer>
+      <footer class="footer"><div class="autosave">系统最佳版本已展示</div><div class="footer-actions"><button class="btn">上一题</button><button class="btn">查看下一题</button><button class="btn warn">纠偏修改</button><button class="btn primary">标记待抽检</button></div></footer>
     </main>
   </div>
   <script src="review-state.js"></script>

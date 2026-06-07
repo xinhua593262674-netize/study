@@ -1,5 +1,5 @@
 const pages = [
-  ["核心工作", [["按真题审核","index.html"],["复审队列","index.html?view=review"],["按知识点审核","knowledge-table.html?mode=review"]]],
+  ["核心工作", [["真题工作台","index.html"],["待抽检","index.html?view=review"],["知识点查看","knowledge-table.html?mode=review"]]],
   ["数据准备", [["教材解析验收","textbook-validation.html"],["知识体系差异","knowledge-diff.html"]]],
   ["发布与成果", [["发布管理","release.html"],["教研大宽表","knowledge-table.html"],["教材预览","textbook-preview.html"],["知识图谱","knowledge-graph.html"]]]
 ];

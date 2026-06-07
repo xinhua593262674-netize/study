@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { evaluateRisks, updateSuggestion, canPublish } = require("../ui/review-state.js");
 
-test("普通审核通过后进入待发布", () => {
+test("高置信度系统版本直接展示", () => {
   const result = evaluateRisks({
     confidence: 92,
     primaryKnowledgeCount: 1,
@@ -11,10 +11,10 @@ test("普通审核通过后进入待发布", () => {
     validity: "仍然有效",
   });
   assert.equal(result.requiresSecondReview, false);
-  assert.equal(result.targetStatus, "待发布");
+  assert.equal(result.targetStatus, "系统已展示");
 });
 
-test("低置信度和规则变化必须进入复审", () => {
+test("低置信度和规则变化进入可选抽检但不阻断展示", () => {
   const result = evaluateRisks({
     confidence: 61,
     primaryKnowledgeCount: 1,
@@ -23,7 +23,8 @@ test("低置信度和规则变化必须进入复审", () => {
     validity: "规则变化",
   });
   assert.deepEqual(result.risks, ["低置信度", "规则变化"]);
-  assert.equal(result.targetStatus, "待复审");
+  assert.equal(result.requiresSecondReview, false);
+  assert.equal(result.targetStatus, "系统已展示·待抽检");
 });
 
 test("人工修改建议会保留修改标记", () => {
@@ -32,7 +33,8 @@ test("人工修改建议会保留修改标记", () => {
   assert.equal(result.changedByReviewer, true);
 });
 
-test("存在未解决阻断项时禁止发布", () => {
-  assert.equal(canPublish([{ level: "blocker", resolved: false }]), false);
+test("待抽检项不阻断发布，仅数据错误阻断", () => {
+  assert.equal(canPublish([{ level: "blocker", resolved: false }]), true);
   assert.equal(canPublish([{ level: "warning", resolved: false }]), true);
+  assert.equal(canPublish([{ level: "error", resolved: false }]), false);
 });

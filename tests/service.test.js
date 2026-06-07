@@ -27,21 +27,34 @@ test("可以读取真实题目、选项和知识关联", () => {
   assert.equal(question.associations[0].knowledgeId, "300074625");
 });
 
-test("完整真题审核动作会持久化并进入待发布", () => {
+test("人工确认会覆盖系统版本但不依赖复审流程", () => {
   const { service } = setup();
   const result = service.saveReview("econ-2025-finance-eval", {
-    action: "提交复审",
+    action: "接受",
     confidence: 96,
     hasMajorAiChanges: false,
     noDirectEvidence: false,
     reviewer: "测试教研",
     snapshot: { selectedOption: "C" },
   });
-  assert.equal(result.targetStatus, "待发布");
+  assert.equal(result.targetStatus, "人工已确认");
   assert.deepEqual(result.risks, []);
   const question = service.getQuestion("econ-2025-finance-eval");
-  assert.equal(question.reviewStatus, "待发布");
+  assert.equal(question.reviewStatus, "人工已确认");
   assert.equal(question.reviews[0].reviewer, "测试教研");
+});
+
+test("低置信度结果保持展示并进入可选抽检", () => {
+  const { service } = setup();
+  const result = service.saveReview("econ-2025-finance-eval", {
+    action: "标记待抽检",
+    confidence: 45,
+    hasMajorAiChanges: false,
+    noDirectEvidence: true,
+    reviewer: "系统",
+  });
+  assert.equal(result.targetStatus, "系统已展示·待抽检");
+  assert.deepEqual(result.risks, ["低置信度", "无直接教材依据"]);
 });
 
 test("完整 Markdown 真题允许创建发布批次", () => {

@@ -16,8 +16,8 @@
     }
     return {
       risks,
-      requiresSecondReview: risks.length > 0,
-      targetStatus: risks.length > 0 ? "待复审" : "待发布",
+      requiresSecondReview: false,
+      targetStatus: risks.length > 0 ? "系统已展示·待抽检" : "系统已展示",
     };
   }
 
@@ -33,7 +33,7 @@
   }
 
   function canPublish(checks) {
-    return !checks.some((check) => check.level === "blocker" && !check.resolved);
+    return !checks.some((check) => check.level === "error" && !check.resolved);
   }
 
   return { REVIEW_THRESHOLD, evaluateRisks, updateSuggestion, canPublish };
