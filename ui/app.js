@@ -114,6 +114,64 @@
     return paragraphs;
   }
 
+  function getTextbookParagraphs(page) {
+    if (page?.blocks?.length) {
+      return page.blocks
+        .filter((block) => ["heading", "paragraph"].includes(block.type) && block.text)
+        .map((block) => block.text);
+    }
+    return groupTextbookParagraphs(page?.text);
+  }
+
+  function renderInlineMath(value) {
+    return escapeHtml(value).replace(/\$([^$]+)\$/g, '<span class="textbook-inline-formula">\\($1\\)</span>');
+  }
+
+  function renderTextbookTable(block) {
+    const headers = (block.headers || []).map((cell) => `<th>${renderInlineMath(cell)}</th>`).join("");
+    const rows = (block.rows || []).map((row) => `<tr>${row.map((cell) => `<td>${renderInlineMath(cell)}</td>`).join("")}</tr>`).join("");
+    return `<div class="textbook-table-wrap"><table class="textbook-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderTextbookMediaBlock(block) {
+    if (block.type === "image") {
+      return `<figure class="textbook-figure"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt || "教材图片")}"><figcaption>${escapeHtml(block.alt || "教材图片")}</figcaption></figure>`;
+    }
+    if (block.type === "formula") {
+      return `<div class="textbook-formula">\\[${escapeHtml(block.latex)}\\]</div>`;
+    }
+    if (block.type === "table") return renderTextbookTable(block);
+    return "";
+  }
+
+  function renderTextbookPage(page, matchesByParagraph = new Map()) {
+    if (!page?.blocks?.length) {
+      return groupTextbookParagraphs(page?.text).map((text, paragraphIndex) => {
+        const matches = matchesByParagraph.get(paragraphIndex) || [];
+        const lowConfidence = matches.some(({ evidence }) => evidence.confidence < 65);
+        return `<p${matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${matches[0].index}"` : ""}>${renderInlineMath(text)}${matches.length ? `<span class="evidence-question-count">关联 ${matches.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : ""}</p>`;
+      }).join("");
+    }
+    let paragraphIndex = 0;
+    return page.blocks.map((block) => {
+      if (!["heading", "paragraph"].includes(block.type)) return renderTextbookMediaBlock(block);
+      const matches = matchesByParagraph.get(paragraphIndex) || [];
+      const lowConfidence = matches.some(({ evidence }) => evidence.confidence < 65);
+      const attributes = matches.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${matches[0].index}"` : "";
+      const count = matches.length ? `<span class="evidence-question-count">关联 ${matches.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : "";
+      paragraphIndex += 1;
+      if (block.type === "heading") {
+        const level = Math.max(2, Math.min(4, Number(block.level || 3)));
+        return `<h${level}${attributes}>${renderInlineMath(block.text)}${count}</h${level}>`;
+      }
+      return `<p${attributes}>${renderInlineMath(block.text)}${count}</p>`;
+    }).join("");
+  }
+
+  function typesetTextbookMath() {
+    if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([$(".doc")]).catch(() => {});
+  }
+
   function scoreQuestionEvidence(question, paragraph) {
     const normalizedParagraph = normalizeEvidenceText(paragraph);
     let terms = questionEvidenceTermsCache.get(question);
@@ -139,7 +197,7 @@
     if (question && questionEvidenceCache.has(question)) return questionEvidenceCache.get(question);
     let best = null;
     for (const page of textbookPages) {
-      const paragraphs = groupTextbookParagraphs(page.text);
+      const paragraphs = getTextbookParagraphs(page);
       paragraphs.forEach((paragraph, paragraphIndex) => {
         const match = scoreQuestionEvidence(question, paragraph);
         if (!match.score || (best && match.score <= best.score)) return;
@@ -312,12 +370,12 @@
         toast("当前未找到可靠教材原文，已保留系统版本", "warn");
         return true;
       }
-      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${evidence.page.page} 页 · ${escapeHtml(raw.knowledge)} <span class="evidence-confidence ${evidence.confidence < 65 ? "low" : ""}">${evidence.confidenceLabel} ${evidence.confidence}%</span></h3>${evidence.paragraphs.map((text, paragraphIndex) => {
-        return `<p${evidence.paragraphIndex === paragraphIndex ? ' class="question-evidence-highlight"' : ""}>${escapeHtml(text)}</p>`;
-      }).join("")}`;
+      const matches = new Map([[evidence.paragraphIndex, [{ index, evidence }]]]);
+      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${evidence.page.page} 页 · ${escapeHtml(raw.knowledge)} <span class="evidence-confidence ${evidence.confidence < 65 ? "low" : ""}">${evidence.confidenceLabel} ${evidence.confidence}%</span></h3>${renderTextbookPage(evidence.page, matches)}`;
       document.body.dataset.textbookPage = String(evidence.page.page);
       const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
       if (pageButton) pageButton.textContent = `P.${evidence.page.page} / ${textbookPages.length}`;
+      typesetTextbookMath();
       toast(`已定位教材第 ${evidence.page.page} 页并高亮考查段落`, "success");
       return true;
     }
@@ -441,21 +499,19 @@
     function renderPage(pageNumber) {
       const page = pages[Math.max(0, Math.min(pages.length - 1, pageNumber - 1))];
       document.body.dataset.textbookPage = String(page.page);
-      const paragraphs = groupTextbookParagraphs(page.text);
       const pageQuestionIndices = [];
-      const renderedParagraphs = paragraphs.map((text, paragraphIndex) => {
+      const matchesByParagraph = new Map();
+      getTextbookParagraphs(page).forEach((text, paragraphIndex) => {
         const matches = rawQuestions.map((question, index) => ({
           index,
           evidence: findQuestionEvidence(question, pages),
         })).filter(({ evidence }) => evidence?.page.page === page.page && evidence.paragraphIndex === paragraphIndex);
-        const indices = matches.map(({ index }) => index);
-        indices.forEach((index) => {
+        matches.forEach(({ index }) => {
           if (!pageQuestionIndices.includes(index)) pageQuestionIndices.push(index);
         });
-        const lowConfidence = matches.some(({ evidence }) => evidence.confidence < 65);
-        return `<p${indices.length ? ` class="question-evidence-highlight textbook-evidence${lowConfidence ? " low-confidence" : ""}" data-question-index="${indices[0]}"` : ""}>${escapeHtml(text)}${indices.length ? `<span class="evidence-question-count">关联 ${indices.length} 道真题${lowConfidence ? " · 含待抽检" : ""}</span>` : ""}</p>`;
-      }).join("");
-      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${renderedParagraphs}`;
+        if (matches.length) matchesByParagraph.set(paragraphIndex, matches);
+      });
+      doc.innerHTML = `<h2>2026 版《建设工程经济》</h2><h3>教材第 ${page.page} 页</h3>${renderTextbookPage(page, matchesByParagraph)}`;
       const pageButton = $$("button").find((button) => /P\.\d+\s*\/\s*\d+/.test(button.textContent));
       if (pageButton) pageButton.textContent = `P.${page.page} / ${pages.length}`;
       const pageLabel = $$(".card-head .push").find((item) => /P\.\d+\s*\/\s*\d+/.test(item.textContent));
@@ -463,6 +519,7 @@
       $$(".textbook-evidence", doc).forEach((paragraph) => paragraph.addEventListener("click", () => {
         document.dispatchEvent(new CustomEvent("textbook-evidence:selected", { detail: { questionIndex: Number(paragraph.dataset.questionIndex) } }));
       }));
+      typesetTextbookMath();
       document.dispatchEvent(new CustomEvent("textbook-page:selected", { detail: { page: page.page, questionIndices: pageQuestionIndices } }));
     }
 
@@ -482,7 +539,7 @@
     if (!button || !input) return;
     markBound(button);
     const existing = getLocalData();
-    const legacy = existing?.questions?.length && existing.version !== "markdown-complete-v1";
+    const legacy = existing?.questions?.length && existing.version !== "rich-textbook-v2";
     if (legacy) {
       button.textContent = "数据版本过旧，请重新加载";
       button.classList.add("warn");
@@ -493,7 +550,7 @@
     button.addEventListener("click", () => input.click());
     input.addEventListener("change", async () => {
       const existingData = getLocalData() || {};
-      const loaded = { version: "markdown-complete-v1", questions: existingData.questions || [], knowledge: existingData.knowledge || [], textbook: existingData.textbook || [] };
+      const loaded = { version: "rich-textbook-v2", questions: existingData.questions || [], knowledge: existingData.knowledge || [], textbook: existingData.textbook || [] };
       for (const file of input.files) {
         const records = JSON.parse(await file.text());
         if (!Array.isArray(records)) continue;
@@ -954,6 +1011,7 @@
     hydrateReleasePage();
     hydrateTextbookPages();
     bindFallbackButtons();
+    window.addEventListener("load", typesetTextbookMath);
     document.addEventListener("keydown", (event) => {
       if (event.altKey && event.key === "ArrowRight") $(".footer .btn:nth-child(2)")?.click();
       if (event.altKey && event.key === "Enter") $(".footer .btn.primary")?.click();

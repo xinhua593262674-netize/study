@@ -24,7 +24,7 @@ test("全部业务页面接入共享真实数据脚本", () => {
 test("前端包含全量题库、完整知识表和本地审核流转能力", () => {
   const app = fs.readFileSync(path.join(ui, "app.js"), "utf8");
   const css = fs.readFileSync(path.join(ui, "app.css"), "utf8");
-  for (const capability of ["hydrateAllQuestionDrawer", "hydratePageQuestionData", "hydrateKnowledgeTable", "updateLocalQuestion", "hydrateReleasePage", "hydrateTextbookPages", "findQuestionEvidence", "scoreQuestionEvidence", "groupTextbookParagraphs", "renderQuestionOptions"]) {
+  for (const capability of ["hydrateAllQuestionDrawer", "hydratePageQuestionData", "hydrateKnowledgeTable", "updateLocalQuestion", "hydrateReleasePage", "hydrateTextbookPages", "findQuestionEvidence", "scoreQuestionEvidence", "groupTextbookParagraphs", "getTextbookParagraphs", "renderTextbookPage", "renderTextbookTable", "renderTextbookMediaBlock", "typesetTextbookMath", "renderQuestionOptions"]) {
     assert.match(app, new RegExp(`function ${capability}`), `缺少 ${capability}`);
   }
   for (const capability of ["textbook-page:selected", "textbook-evidence:selected"]) {
@@ -32,5 +32,13 @@ test("前端包含全量题库、完整知识表和本地审核流转能力", ()
   }
   for (const capability of ["question-evidence-highlight", "evidence-question-count", "question-options", "evidence-confidence"]) {
     assert.match(css, new RegExp(capability), `缺少教材真题联动样式 ${capability}`);
+  }
+});
+
+test("教材页面接入公式排版能力", () => {
+  for (const page of ["textbook-preview.html", "textbook-validation.html"]) {
+    const html = fs.readFileSync(path.join(ui, page), "utf8");
+    assert.match(html, /MathJax/, `${page} 未接入公式排版`);
+    assert.match(html, /tex-mml-chtml\.js/, `${page} 未加载公式渲染脚本`);
   }
 });

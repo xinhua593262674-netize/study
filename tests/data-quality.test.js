@@ -23,6 +23,15 @@ test("全部教材页面包含可展示正文", () => {
   assert.deepEqual(textbook.map((page) => page.page), Array.from({ length: 388 }, (_, index) => index + 1));
 });
 
+test("教材图片、公式和表格结构完整", () => {
+  const blocks = textbook.flatMap((page) => page.blocks || []);
+  assert.equal(textbook.filter((page) => !page.blocks?.length).length, 0);
+  assert.equal(blocks.filter((block) => block.type === "image").length, 67);
+  assert.ok(blocks.filter((block) => block.type === "table").length >= 90);
+  assert.ok(blocks.filter((block) => block.type === "formula").length >= 250);
+  assert.ok(blocks.filter((block) => block.type === "image").every((block) => block.src.startsWith("data:image/")));
+});
+
 test("全部真题包含真实题干、答案、解析和选项", () => {
   assert.equal(questions.filter((item) => item.stem.includes("来源题干待修复")).length, 0);
   assert.equal(questions.filter((item) => !item.stem || !item.answer || !item.analysis).length, 0);
