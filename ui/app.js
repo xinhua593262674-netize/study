@@ -81,6 +81,39 @@
       .filter((term) => term.length >= 10);
   }
 
+  function isTextbookHeading(line) {
+    const text = String(line || "").trim();
+    if (!text || text.length > 42) return false;
+    return /^第.{1,18}[章节篇]/.test(text)
+      || /^\d+(?:\.\d+){1,5}\s*\S+/.test(text)
+      || /^\d+[.)、]\s*\S+/.test(text)
+      || /^[（(]\d+[）)]\s*\S+/.test(text)
+      || /^(?:表|图)\s*[\d. -]+\S*/.test(text);
+  }
+
+  function groupTextbookParagraphs(value) {
+    const lines = String(value || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
+    const paragraphs = [];
+    let buffer = [];
+    const flush = () => {
+      if (!buffer.length) return;
+      paragraphs.push(buffer.join(""));
+      buffer = [];
+    };
+    lines.forEach((line) => {
+      const standalone = isTextbookHeading(line) || line.length <= 2;
+      if (standalone) {
+        flush();
+        paragraphs.push(line);
+        return;
+      }
+      buffer.push(line);
+      if (/[。！？!?]$/.test(line)) flush();
+    });
+    flush();
+    return paragraphs;
+  }
+
   function scoreQuestionEvidence(question, paragraph) {
     const normalizedParagraph = normalizeEvidenceText(paragraph);
     let terms = questionEvidenceTermsCache.get(question);
@@ -106,7 +139,7 @@
     if (question && questionEvidenceCache.has(question)) return questionEvidenceCache.get(question);
     let best = null;
     for (const page of textbookPages) {
-      const paragraphs = String(page.text || "").split(/\n+/).filter(Boolean);
+      const paragraphs = groupTextbookParagraphs(page.text);
       paragraphs.forEach((paragraph, paragraphIndex) => {
         const match = scoreQuestionEvidence(question, paragraph);
         if (!match.score || (best && match.score <= best.score)) return;
@@ -116,6 +149,17 @@
     if (!best) {
       if (question) questionEvidenceCache.set(question, null);
       return null;
+    }
+    if (isTextbookHeading(best.paragraphs[best.paragraphIndex])) {
+      let bodyParagraphIndex = -1;
+      for (let index = best.paragraphIndex + 1; index < best.paragraphs.length; index += 1) {
+        if (isTextbookHeading(best.paragraphs[index])) break;
+        if (best.paragraphs[index].length >= 12) {
+          bodyParagraphIndex = index;
+          break;
+        }
+      }
+      if (bodyParagraphIndex >= 0) best.paragraphIndex = bodyParagraphIndex;
     }
     const confidence = best.analysisMatches.length ? 92 : best.correctMatches.length ? 72 : 45;
     const evidence = {
@@ -397,7 +441,7 @@
     function renderPage(pageNumber) {
       const page = pages[Math.max(0, Math.min(pages.length - 1, pageNumber - 1))];
       document.body.dataset.textbookPage = String(page.page);
-      const paragraphs = page.text.split(/\n+/).filter(Boolean);
+      const paragraphs = groupTextbookParagraphs(page.text);
       const pageQuestionIndices = [];
       const renderedParagraphs = paragraphs.map((text, paragraphIndex) => {
         const matches = rawQuestions.map((question, index) => ({
