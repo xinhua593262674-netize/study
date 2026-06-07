@@ -16,7 +16,7 @@
     body { margin: 0; min-width: 1380px; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
     button { font: inherit; cursor: pointer; }
     .app { display: grid; grid-template-columns: 218px 1fr; min-height: 100vh; }
-    .sidebar { background: var(--nav); color: #cbd3e6; padding: 22px 14px; }
+    .sidebar { position:sticky; top:0; height:100vh; overflow:hidden; background: var(--nav); color: #cbd3e6; padding: 22px 14px; }
     .brand { display: flex; gap: 11px; align-items: center; color: white; font-weight: 700; font-size: 16px; padding: 0 10px 24px; }
     .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(145deg,#6f8cff,#3159d9); display:grid; place-items:center; box-shadow:0 6px 16px rgba(49,89,217,.35); }
     .logo svg { width:18px; fill:white; }

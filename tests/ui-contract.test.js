@@ -33,6 +33,9 @@ test("前端包含全量题库、完整知识表和本地审核流转能力", ()
   for (const capability of ["question-evidence-highlight", "evidence-question-count", "question-options", "evidence-confidence", "textbook-continuous", "textbook-page-section"]) {
     assert.match(css, new RegExp(capability), `缺少教材真题联动样式 ${capability}`);
   }
+  assert.match(css, /\.sidebar\{position:sticky;top:0;height:100vh;overflow:hidden\}/, "左侧功能栏未固定");
+  assert.match(css, /\.textbook-formula\{[^}]*overflow:visible/, "教材公式仍存在独立滚动");
+  assert.match(fs.readFileSync(path.join(ui, "index.html"), "utf8"), /\.sidebar \{ position:sticky; top:0; height:100vh; overflow:hidden;/, "真题工作台左侧功能栏未固定");
 });
 
 test("教材页面接入公式排版能力", () => {
