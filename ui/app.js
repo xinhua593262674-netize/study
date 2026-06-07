@@ -203,8 +203,22 @@
     }));
   }
 
+  function normalizeLatex(value) {
+    return String(value || "")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#0*39;|&apos;/gi, "'")
+      .replace(/&amp;/gi, "&");
+  }
+
   function renderInlineMath(value) {
-    return escapeHtml(value).replace(/\$([^$]+)\$/g, '<span class="textbook-inline-formula">\\($1\\)</span>');
+    return String(value || "").split(/(\$[^$]+\$)/g).map((part) => {
+      if (part.startsWith("$") && part.endsWith("$")) {
+        return `<span class="textbook-inline-formula">\\(${escapeHtml(normalizeLatex(part.slice(1, -1)))}\\)</span>`;
+      }
+      return escapeHtml(part);
+    }).join("");
   }
 
   function renderTextbookTable(block) {
@@ -218,7 +232,7 @@
       return `<figure class="textbook-figure"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt || "教材图片")}"><figcaption>${escapeHtml(block.alt || "教材图片")}</figcaption></figure>`;
     }
     if (block.type === "formula") {
-      return `<div class="textbook-formula">\\[${escapeHtml(block.latex)}\\]</div>`;
+      return `<div class="textbook-formula">\\[${escapeHtml(normalizeLatex(block.latex))}\\]</div>`;
     }
     if (block.type === "table") return renderTextbookTable(block);
     return "";

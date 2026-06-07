@@ -24,7 +24,7 @@ test("全部业务页面接入共享真实数据脚本", () => {
 test("前端包含全量题库、完整知识表和本地审核流转能力", () => {
   const app = fs.readFileSync(path.join(ui, "app.js"), "utf8");
   const css = fs.readFileSync(path.join(ui, "app.css"), "utf8");
-  for (const capability of ["hydrateAllQuestionDrawer", "hydratePageQuestionData", "hydrateKnowledgeTable", "updateLocalQuestion", "hydrateReleasePage", "hydrateTextbookPages", "findQuestionEvidence", "findQuestionEvidences", "getQuestionSectionEvidence", "getTextbookSections", "isTextbookEvidenceParagraph", "scoreQuestionEvidence", "groupTextbookParagraphs", "getTextbookParagraphs", "renderTextbookPage", "renderTextbookTable", "renderTextbookMediaBlock", "typesetTextbookMath", "renderQuestionOptions"]) {
+  for (const capability of ["hydrateAllQuestionDrawer", "hydratePageQuestionData", "hydrateKnowledgeTable", "updateLocalQuestion", "hydrateReleasePage", "hydrateTextbookPages", "findQuestionEvidence", "findQuestionEvidences", "getQuestionSectionEvidence", "getTextbookSections", "isTextbookEvidenceParagraph", "scoreQuestionEvidence", "groupTextbookParagraphs", "getTextbookParagraphs", "normalizeLatex", "renderTextbookPage", "renderTextbookTable", "renderTextbookMediaBlock", "typesetTextbookMath", "renderQuestionOptions"]) {
     assert.match(app, new RegExp(`function ${capability}`), `缺少 ${capability}`);
   }
   for (const capability of ["textbook-page:selected", "textbook-evidence:selected", "textbook-evidence:visible"]) {
